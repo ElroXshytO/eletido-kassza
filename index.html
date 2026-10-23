@@ -653,7 +653,7 @@ function daysUntil(d){ const t = new Date(); t.setHours(0,0,0,0); return Math.ro
 /* ---------- nézetek ---------- */
 let tab = (location.hash || '').slice(1) || 'home';
 if(!['home','fix','zseb','stat','cel','beall'].includes(tab)) tab = 'home';
-let confirmReset = false;
+let confirmReset = false, relDelArm = null;
 
 const gear = `<button class="icon-btn" data-go="beall" aria-label="Beállítások"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`;
 
@@ -1364,6 +1364,11 @@ function viewBeall(){
       ? `<div class="confirm"><span>Biztosan törölsz minden adatot? Utána újra az első beállítás jön.</span><button class="btn solid-danger" data-reset-yes>Igen, törlöm</button><button class="btn" data-reset-no>Mégse</button></div>`
       : `<div><button class="btn danger" data-reset>Minden adat visszaállítása</button></div>`}
   </section>
+  ${(S.released || []).length ? `<section class="card"><h2>Törölt zsebekből a pluszhoz adott összegek</h2>
+    <p class="soon">Ha egy zseb csak próba volt, itt kiveheted az összegét, így nem növeli a hó végi pluszt.</p>
+    <div class="rows">${S.released.map((r, i) => `<div class="row fx sv"><div class="name">${esc(r.name || 'zseb')}<small>${esc(r.date)}</small></div>
+      <div class="val">${ft(r.amount)}<button class="del ${relDelArm === i ? 'armed' : ''}" data-rel-del="${i}">${relDelArm === i ? 'Biztos?' : 'Törlés'}</button></div></div>`).join('')}</div>
+  </section>` : ''}
   <section class="card"><h2>Biztonsági mentés</h2>
     <p class="soon">Az adataid ebben a böngészőben vannak. Időnként ments fájlba (pl. a Drive-ra), új telefonon vagy böngészőben ebből töltheted vissza.</p>
     <div class="confirm"><button class="btn" data-export>Mentés fájlba</button><button class="btn" data-import>Betöltés fájlból</button></div>
@@ -1516,6 +1521,9 @@ document.addEventListener('click', e => {
   if('undo' in b.dataset){ if(lastAdded){ S.expenses = S.expenses.filter(x => x.id !== lastAdded); lastAdded = null; save(); render(); } document.getElementById('toast').hidden = true; return; }
   if('setupSave' in b.dataset) return saveSetup();
   if('export' in b.dataset) return exportData();
+  if(b.dataset.relDel !== undefined){ const i = +b.dataset.relDel;
+    if(relDelArm !== i){ relDelArm = i; return render(); }
+    const r = S.released[i]; S.released.splice(i, 1); relDelArm = null; save(); render(); return toast(`${ft(r.amount)} kivéve a pluszból`, false); }
   if('import' in b.dataset){ const inp = document.getElementById('import-input'); inp.value = ''; return inp.click(); }
   if('reset' in b.dataset){ confirmReset = true; return render(); }
   if('resetNo' in b.dataset){ confirmReset = false; return render(); }
