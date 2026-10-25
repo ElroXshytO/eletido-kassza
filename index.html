@@ -388,8 +388,11 @@ function hydrate(o){ const d = defaults(); if(!o || typeof o!=='object') o = {};
 
 let S = hydrate(readLocal());
 /* első indítás: amíg nincs mentett adat, a beállító képernyő jön (a felhő ellenőrzése után) */
-/* saját oldalon nincs claude.ai felhő: az adatok a böngészőben vannak, biztonsági mentés fájlba */
-let needSetup = !S.updatedAt, cloudChecked = true;
+/* felhő: Firebase (Google-belépés). Belépés nélkül az adatok csak ebben a böngészőben vannak. */
+const FB_CONFIG = { /* nyilvános webes azonosítók, nem jelszó: a védelmet a Firestore szabály adja */
+  apiKey:'AIzaSyBUqfl-xqDIYenQRAD4pnHw87o6v42qdJI', authDomain:'eletido-kassza.firebaseapp.com', projectId:'eletido-kassza',
+  storageBucket:'eletido-kassza.firebasestorage.app', messagingSenderId:'795981846306', appId:'1:795981846306:web:031b658f27b38f04c1f77b' };
+let needSetup = !S.updatedAt, cloudChecked = !FB_CONFIG;
 const cloud = { ref:null, ok:false, busy:false, again:false, timer:null, base:0, conflict:false };
 
 function save(){
@@ -416,7 +419,7 @@ function showConflict(){
   cloud.conflict = true;
   if(document.getElementById('conflict')) return;
   const el = document.createElement('div'); el.id = 'conflict'; el.className = 'conflict';
-  el.innerHTML = '<span>Az appot egy másik helyen is használtad, ott frissebb mentés van. Töltsd újra, hogy ne vesszen el semmi.</span><button class="btn primary" data-reload>Újratöltés</button>';
+  el.innerHTML = '<span>Egy másik eszközön frissebb mentés van. Melyik maradjon meg?</span><button class="btn primary" data-reload>A felhőé</button><button class="btn" data-keep-local>Ezé az eszközé</button>';
   document.body.appendChild(el);
 }
 /* ha visszatérsz az apphoz (pl. másik eszköz után), megnézzük, van-e frissebb mentés */
@@ -425,26 +428,46 @@ document.addEventListener('visibilitychange', async () => {
   try{ const snap = await cloud.ref.get(); const r = snap.exists ? (snap.data() || {}).updatedAt || 0 : 0;
     if(r > cloud.base && r !== S.updatedAt){ const remote = snap.data(); if((S.updatedAt || 0) <= cloud.base){ S = hydrate(remote); cloud.base = r; writeLocal(); render(); } else showConflict(); } }catch(e){}
 });
+const FB_VER = '10.12.2', fb = { auth:null, mod:null, user:null };
 async function initCloud(){
+  if(!FB_CONFIG){ cloudChecked = true; return; }
+  const done = () => { if(!cloudChecked){ cloudChecked = true; needSetup = needSetup && !S.updatedAt; render(); } };
+  setTimeout(done, 5000); /* ha a felhő nem válaszol, az app akkor is induljon */
   try{
-    if(!window.claude || !window.claude.use) return;
-    const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
-    if(!db || !user) return;
-    const id = await user.id();
-    if(!id) return;
-    cloud.ref = db.doc('data/users/' + id + '/state');
-    const snap = await cloud.ref.get();
-    cloud.ok = true;
-    if(snap.exists){
-      const remote = snap.data() || {};
-      cloud.base = remote.updatedAt || 0;
-      if((remote.updatedAt||0) > (S.updatedAt||0)){ S = hydrate(remote); writeLocal(); render(); }
-      else if((S.updatedAt||0) > (remote.updatedAt||0)) pushCloud();
-    } else if(S.updatedAt) pushCloud();
-    renderStatus();
-  }catch(e){ cloud.ok = false; renderStatus(); }
-  finally{ cloudChecked = true; needSetup = needSetup && !S.updatedAt; render(); }
+    const base = `https://www.gstatic.com/firebasejs/${FB_VER}/`;
+    const [A, Au, F] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
+    const app = A.initializeApp(FB_CONFIG), db = F.getFirestore(app);
+    fb.auth = Au.getAuth(app); fb.mod = { Au, F, db };
+    Au.onAuthStateChanged(fb.auth, async user => {
+      fb.user = user;
+      if(!user){ cloud.ref = null; cloud.ok = false; done(); render(); return; }
+      const d = F.doc(db, 'users', user.uid);
+      /* a régi felhős kódhoz illesztett felület: get() → {exists, data()}, set(obj); JSON-ként tároljuk (a Firestore nem enged tömbben tömböt) */
+      cloud.ref = {
+        get: async () => { const s = await F.getDoc(d); const raw = s.exists() ? s.data().data : null; return { exists: !!raw, data: () => raw ? JSON.parse(raw) : null }; },
+        set: obj => F.setDoc(d, { data: JSON.stringify(obj), updatedAt: obj.updatedAt || 0 })
+      };
+      cloud.conflict = false; const old = document.getElementById('conflict'); if(old) old.remove();
+      try{
+        const snap = await cloud.ref.get(); cloud.ok = true;
+        if(snap.exists){
+          const remote = snap.data() || {};
+          cloud.base = remote.updatedAt || 0;
+          if((remote.updatedAt||0) > (S.updatedAt||0)){ S = hydrate(remote); writeLocal(); needSetup = false; }
+          else if((S.updatedAt||0) > (remote.updatedAt||0)) pushCloud();
+        } else if(S.updatedAt) pushCloud();
+      }catch(e){ cloud.ok = false; }
+      done(); render();
+    });
+  }catch(e){ cloud.ok = false; done(); }
 }
+async function signIn(){
+  if(!fb.auth) return toast('A felhő most nem érhető el', false);
+  const { Au } = fb.mod, p = new Au.GoogleAuthProvider();
+  try{ await Au.signInWithPopup(fb.auth, p); }
+  catch(e){ if(e && e.code === 'auth/popup-blocked') return Au.signInWithRedirect(fb.auth, p); if(e && e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') toast('A belépés nem sikerült: ' + (e.code || e.message), false); }
+}
+async function signOut(){ if(fb.auth) await fb.mod.Au.signOut(fb.auth); toast('Kiléptél, az adatok ebben a böngészőben maradnak', false); }
 
 /* ---------- blokk fotóról (Claude olvassa ki) ---------- */
 const scan = { api:null, status:'idle', msg:'', data:null, ctl:null };
@@ -1320,6 +1343,7 @@ function viewSetup(){
   <p class="soon" id="su-msg"></p>
   <button class="btn primary" data-setup-save style="width:100%">Kezdés</button>
   <button class="btn" data-import style="width:100%">Van mentésem: betöltés fájlból</button>
+  ${FB_CONFIG ? `<button class="btn" data-sign-in style="width:100%">Már használom: belépés Google-lel</button>` : ''}
   <p class="soon">Fix költségeket, zsebeket, megtakarításokat és célokat a fülökön a „+” gombokkal vehetsz fel.</p>`;
 }
 function saveSetup(){
@@ -1428,9 +1452,9 @@ function renderEdit(){
 function closeEdit(){ glEdit = null; glDelArm = false; phEdit = null; phDelArm = false; fixEdit = null; svEdit = null; svDep = null; zsEdit = null; fixDelArm = false; svDelArm = false; zsDelArm = false; render(); }
 function renderStatus(){
   const el = document.getElementById('sync'); if(!el) return;
-  el.innerHTML = cloud.ref && cloud.ok
-    ? `<i class="on"></i>Mentve ebben a böngészőben és a fiókodban is`
-    : `<i></i>Mentve ebben a böngészőben`;
+  el.innerHTML = !FB_CONFIG ? `<i></i>Mentve ebben a böngészőben`
+    : fb.user ? `<i class="${cloud.ok ? 'on' : 'bad'}"></i>${cloud.ok ? 'Mentve a böngészőben és a felhőben' : 'A felhő most nem érhető el, a böngészőben mentve'} · ${esc(fb.user.email || '')} <button class="linkbtn" data-sign-out>Kilépés</button>`
+    : `<i></i>Csak ebben a böngészőben · <button class="linkbtn" data-sign-in>Belépés Google-lel</button>`;
 }
 function applyTheme(){
   const t = S.settings.theme, r = document.documentElement;
@@ -1478,6 +1502,9 @@ document.addEventListener('click', e => {
     return toast(bal > 0 ? `Zseb törölve, ${ft(bal)} a hó végi pluszhoz került` : 'Zseb törölve', false); }
   if(b.dataset.zsPay){ if(zsPayArm !== b.dataset.zsPay){ zsPayArm = b.dataset.zsPay; return render(); } return payZseb(b.dataset.zsPay); }
   if('reload' in b.dataset){ try{ localStorage.removeItem(LS_KEY); }catch(_){} return location.reload(); }
+  if('keepLocal' in b.dataset){ cloud.ref.get().then(s => { cloud.base = s.exists ? (s.data().updatedAt || 0) : 0; cloud.conflict = false; const el = document.getElementById('conflict'); if(el) el.remove(); save(); toast('Ennek az eszköznek az adatai mentve a felhőbe', false); }); return; }
+  if('signIn' in b.dataset) return signIn();
+  if('signOut' in b.dataset) return signOut();
   if(b.dataset.tab) return go(b.dataset.tab);
   if(b.dataset.go) return go(tab === b.dataset.go ? 'home' : b.dataset.go);
   if(b.dataset.themeSet){ S.settings.theme = b.dataset.themeSet; save(); return render(); }
@@ -1571,5 +1598,6 @@ document.addEventListener('input', e => {
 document.addEventListener('keydown', e => { if(e.key === 'Escape' && !document.getElementById('scan').hidden){ closeScan(); return; } const t = e.target.closest && e.target.closest('[data-toggle]'); if(t && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); toggleEntry(t.dataset.toggle); return; } if(e.key === 'Escape' && !document.getElementById('add').hidden) closeAdd(); });
 window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if(VIEWS[t] && t !== tab){ tab = t; render(); } });
 render();
+initCloud();
 </script>
 </body></html>
