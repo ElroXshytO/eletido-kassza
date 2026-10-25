@@ -149,7 +149,7 @@ button{cursor:pointer}
 .entries .entry{border-top:1px solid var(--line)}
 .entries .entry:first-child{border-top:0}
 .entries .row{border-top:0}
-.row.toggle{cursor:pointer}
+.row.toggle,h2[data-recent]{cursor:pointer}
 .caret{color:var(--muted);margin-left:6px;font-size:.85em}
 .receipt{background:var(--surface-2);border-radius:12px;padding:10px 12px;margin:0 0 10px 38px;display:flex;flex-direction:column;gap:8px}
 .receipt .items{margin:0;font-size:.88rem;color:var(--muted);line-height:1.6}
@@ -375,7 +375,7 @@ function hydrate(o){ const d = defaults(); if(!o || typeof o!=='object') o = {};
   const r = {...d, ...o, settings:{...d.settings, ...(o.settings||{})}, sheet:{...d.sheet, ...(o.sheet||{})}};
   delete r.settings.erste; delete r.__tok; /* az Erste már nem beépített, megtakarítási formaként veszi fel */
   r.pockets = (Array.isArray(r.pockets) ? r.pockets : d.pockets).map(migratePocket);
-  r.released = Array.isArray(r.released) ? r.released : [];
+  r.released = [];
   /* régi zárolás (locked:true = minden nem zárolt fázis kell) → választott feloldó fázis: az előtte lévő utolsó fázis */
   r.phases = (Array.isArray(r.phases) ? r.phases : []).map((ph, i, all) => {
     ph = {...ph, items:Array.isArray(ph.items) ? ph.items : []};
@@ -750,7 +750,7 @@ function viewHome(){
   ${S.sheet.rows.length ? `<p class="soon">A táblázat kapcsolata ki van kapcsolva. A régi, átmásolt tételek megmaradtak.</p>` : ''}`;
 }
 
-let showAll = false, pendingDelete = null, splitMode = null;
+let showAll = false, recentOpen = false, pendingDelete = null, splitMode = null;
 const openReceipts = new Set();
 const itemKey = it => `${it.name}|${it.amount}`;
 const GAP = 30 * 60 * 1000;
@@ -853,10 +853,12 @@ let lastEntries = [];
 function recentCard(p){
   const list = lastEntries = periodEntries(p);
   if(!list.length) return `<section class="card"><h2>E havi költések</h2><p class="soon">Még nincs tétel ebben a hónapban. A jobb alsó „+” gombbal veheted fel az elsőt.</p></section>`;
-  const shown = showAll ? list : list.slice(0, 8);
-  return `<section class="card"><h2>E havi költések <span class="count num">${list.length} számla · ${ft(sum(list, e => e.amount))}</span></h2>
+  const shown = showAll ? list : list.slice(0, 10);
+  const head = `<h2 class="toggle" role="button" tabindex="0" data-recent aria-expanded="${recentOpen}">E havi költések<span class="caret" aria-hidden="true">${recentOpen ? '▾' : '▸'}</span> <span class="count num">${list.length} számla · ${ft(sum(list, e => e.amount))}</span></h2>`;
+  if(!recentOpen) return `<section class="card">${head}</section>`;
+  return `<section class="card">${head}
     <div class="rows entries">${shown.map(entryRow).join('')}</div>
-    ${list.length > 8 ? `<button class="linkbtn more" data-more>${showAll ? 'Kevesebb' : `Mind a ${list.length} számla`}</button>` : ''}
+    ${!showAll && list.length > 10 ? `<button class="linkbtn more" data-more>Még ${list.length - 10} tétel</button>` : ''}
   </section>`;
 }
 
@@ -1467,7 +1469,10 @@ document.addEventListener('click', e => {
   if(e.target.closest('.scrim')) return e.target.closest('#scan') ? closeScan() : e.target.closest('#edit') ? closeEdit() : closeAdd();
   if(e.target.closest('[data-edit-close]')) return closeEdit();
   const b = e.target.closest('button');
-  if(!b){ const t = e.target.closest('[data-toggle]'); if(t) toggleEntry(t.dataset.toggle); return; }
+  if(!b){
+    if(e.target.closest('[data-recent]')){ recentOpen = !recentOpen; showAll = false; return render(); }
+    const t = e.target.closest('[data-toggle]'); if(t) toggleEntry(t.dataset.toggle); return;
+  }
   if(pendingDelete && !b.dataset.del){ pendingDelete = null; }
   if(svDepDel && !b.dataset.sdDel){ svDepDel = null; }
   if(zsPayArm && b.dataset.zsPay !== zsPayArm){ zsPayArm = null; }
@@ -1497,9 +1502,8 @@ document.addEventListener('click', e => {
   if('zsSave' in b.dataset) return saveZseb();
   if('zsDel' in b.dataset){ if(!zsDelArm){ zsDelArm = true; return render(); }
     const z = S.pockets.find(x => x.id === zsEdit), bal = z ? zsBalance(z) : 0;
-    if(bal > 0) S.released.push({ date:ymd(new Date()), amount:bal, name:z.name });
     S.pockets = S.pockets.filter(x => x.id !== zsEdit); zsEdit = null; zsDelArm = false; save(); render();
-    return toast(bal > 0 ? `Zseb törölve, ${ft(bal)} a hó végi pluszhoz került` : 'Zseb törölve', false); }
+    return toast('Zseb törölve', false); }
   if(b.dataset.zsPay){ if(zsPayArm !== b.dataset.zsPay){ zsPayArm = b.dataset.zsPay; return render(); } return payZseb(b.dataset.zsPay); }
   if('reload' in b.dataset){ try{ localStorage.removeItem(LS_KEY); }catch(_){} return location.reload(); }
   if('keepLocal' in b.dataset){ cloud.ref.get().then(s => { cloud.base = s.exists ? (s.data().updatedAt || 0) : 0; cloud.conflict = false; const el = document.getElementById('conflict'); if(el) el.remove(); save(); toast('Ennek az eszköznek az adatai mentve a felhőbe', false); }); return; }
@@ -1536,7 +1540,7 @@ document.addEventListener('click', e => {
   if('scSave' in b.dataset) return saveScan();
   if('close' in b.dataset) return closeAdd();
   if(b.dataset.cat) return addExpense(b.dataset.cat);
-  if('more' in b.dataset){ showAll = !showAll; return render(); }
+  if('more' in b.dataset){ showAll = true; return render(); }
   if(b.dataset.split){ splitMode = b.dataset.split; return render(); }
   if('splitCancel' in b.dataset){ splitMode = null; return render(); }
   if(b.dataset.splitAt){ return splitEntry(b.dataset.entry, +b.dataset.splitAt); }
