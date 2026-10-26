@@ -110,8 +110,8 @@ button{cursor:pointer}
 
 /* menüsor */
 .nav{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px))}
-.nav-in{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr);height:var(--nav-h)}
-.nav button{border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:.72rem;font-weight:600;color:var(--muted)}
+.nav-in{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(6,auto);justify-content:space-between;height:var(--nav-h)}
+.nav button{border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:.68rem;padding:0 4px;white-space:nowrap;font-weight:600;color:var(--muted)}
 .nav button svg{width:22px;height:22px}
 .nav button[aria-current="page"]{color:var(--accent)}
 
@@ -234,6 +234,10 @@ small.late{color:var(--bad)!important;font-weight:600}
 .sv-dep small{color:var(--muted)}
 .danger-txt{color:var(--bad)}
 .per{font-size:1rem;color:var(--muted);font-weight:500}
+.acc-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.acc-two>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.acc-two small{color:var(--muted);font-size:.78rem}.acc-two .neg{color:var(--bad)}
+.zs-last{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.8rem;color:var(--muted);margin-top:6px}
+.form-msg{grid-column:1 / -1;color:var(--bad);font-weight:600;font-size:.88rem;margin:0}
 
 /* gyors bevitel */
 .fab{position:fixed;z-index:25;right:max(16px,calc(env(safe-area-inset-right,0px) + 16px));bottom:calc(var(--nav-h) + 16px + env(safe-area-inset-bottom,0px));width:60px;height:60px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;box-shadow:0 6px 18px rgba(0,0,0,.22)}
@@ -269,6 +273,7 @@ small.late{color:var(--bad)!important;font-weight:600}
   <button data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Főoldal</button>
   <button data-tab="fix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Fix</button>
   <button data-tab="zseb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v5a8 8 0 0 1-16 0z"/><path d="M9 11l3 3 3-3"/></svg>Zsebek</button>
+  <button data-tab="mt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M12 11v5M9.5 13.5h5"/></svg>Megtakarítás</button>
   <button data-tab="stat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Statisztika</button>
   <button data-tab="cel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>Célok</button>
 </div></nav>
@@ -340,7 +345,9 @@ const uid = () => Math.random().toString(36).slice(2,9);
 function defaults(){
   return {
     v:1, updatedAt:0,
-    settings:{ salary:0, hours:168, rate:0, payday:1, goalSaving:0, budget:0, theme:'system' },
+    settings:{ salary:0, hours:168, rate:0, payday:1, goalSaving:0, budget:0, theme:'system', accA:'', accB:'', accAIn:0 },
+    /* egyéb bevétel (pl. talált pénz): a hónap bevételéhez adódik */
+    income:[],
     fixed:[],
     /* tartalék-zsebek: havi félretétel a startKey hónaptól */
     pockets:[],
@@ -383,6 +390,7 @@ function hydrate(o){ const d = defaults(); if(!o || typeof o!=='object') o = {};
     if(ph.locked && !('unlockBy' in ph)) ph.unlockBy = all.slice(0, i).filter(x => !x.locked).map(x => x.id);
     ph.items = ph.items.map(it => it.note === 'zárolva, amíg az 1. és 2. fázis kész' ? {...it, note:''} : it);
     delete ph.locked; ph.unlockBy = Array.isArray(ph.unlockBy) ? ph.unlockBy : ph.unlockBy ? [ph.unlockBy] : []; return ph; });
+  r.income = Array.isArray(r.income) ? r.income : [];
   r.savings = (Array.isArray(r.savings) ? r.savings : []).map(v => ({...v, deposits:Array.isArray(v.deposits) ? v.deposits : [], skip:Array.isArray(v.skip) ? v.skip : []}));
   return r; }
 
@@ -645,8 +653,26 @@ function monthPlan(p = periodOf()){
   const variable = Math.max(st.budget, spent);
   const savings = sum(S.savings || [], x => x.monthly);
   const released = sum((S.released || []).filter(x => x.date >= ymd(p.start) && x.date <= ymd(p.end)), x => x.amount);
-  const plus = st.salary - st.goalSaving - fixed - pockets - savings - variable - extra + released;
-  return { fixed, pockets, savings, released, spent, extra, variable, plus };
+  const income = sum(periodIncome(p), x => x.amount);
+  const fixedB = twoAcc() ? sum(S.fixed.filter(x => x.acc === 'B'), x => x.amount) : 0;
+  const plus = st.salary + income - st.goalSaving - fixed - pockets - savings - variable - extra + released;
+  return { fixed, fixedB, pockets, savings, released, income, spent, extra, variable, plus };
+}
+/* ---------- két számla: az elsőre megy a beállított összeg és az egyéb bevétel, a másodikon marad a fizetés többi része ---------- */
+const twoAcc = () => S.settings.accAIn > 0 && S.settings.accAIn < S.settings.salary;
+const accName = k => k === 'B' ? (S.settings.accB || 'Másik számla') : (S.settings.accA || 'Fő számla');
+const fixAcc = f => twoAcc() && f.acc === 'B' ? 'B' : 'A';
+function periodIncome(p){ const a = ymd(p.start), b = ymd(p.end); return (S.income || []).filter(x => x.date >= a && x.date <= b); }
+/* most = a bejött pénz mínusz ami eddig kiment (kifizetett fix, zsebek, megtakarítás, költés); hó végén = a terv szerinti maradék */
+function accounts(p, m){
+  const st = S.settings, a = ymd(p.start), z = ymd(p.end), inB = st.salary - st.accAIn;
+  const paid = k => sum(S.fixed.filter(f => fixAcc(f) === k && fixedPaid(f)), f => f.amount);
+  const svNow = sum((S.savings || []).flatMap(v => v.deposits || []).filter(d => d.date >= a && d.date <= z), d => d.amount);
+  const inA = st.accAIn + m.income, endB = inB - m.fixedB;
+  return [
+    { name:accName('A'), in:inA, now:inA - paid('A') - m.pockets - st.goalSaving - svNow - m.spent - m.extra, end:m.plus - endB },
+    { name:accName('B'), in:inB, now:inB - paid('B'), end:endB }
+  ];
 }
 /* A hónap költései. A kézi bevitel az elsődleges, a táblázat csak kiegészít:
    egy táblázatsor kimarad, ha egy kézi tétel már lefedi. Lefedi, ha
@@ -675,8 +701,8 @@ function daysUntil(d){ const t = new Date(); t.setHours(0,0,0,0); return Math.ro
 
 /* ---------- nézetek ---------- */
 let tab = (location.hash || '').slice(1) || 'home';
-if(!['home','fix','zseb','stat','cel','beall'].includes(tab)) tab = 'home';
-let confirmReset = false, relDelArm = null;
+if(!['home','fix','zseb','mt','stat','cel','beall'].includes(tab)) tab = 'home';
+let confirmReset = false, relDelArm = null, incEdit = false, incDelArm = null;
 
 const gear = `<button class="icon-btn" data-go="beall" aria-label="Beállítások"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`;
 
@@ -699,16 +725,17 @@ function viewHome(){
   const p = periodOf(), m = monthPlan(p), st = S.settings, b = budgetState(p, m);
   const days = daysUntil(p.next);
   const parts = [
-    {k:'goal',   name:'Célkassza, fix félretétel', v:st.goalSaving, c:'--c-goal'},
+    {k:'inc', name:'Egyéb bevétel', v:-m.income, c:'--c-plus', sub:periodIncome(p).map(x => x.name).join(', ')},
+    {k:'goal',   name:'Megtakarítás', v:st.goalSaving, c:'--c-goal', sub:'havi fix félretétel'},
     {k:'fixed',  name:'Fix költségek', v:m.fixed, c:'--c-fixed', sub:`${S.fixed.length} tétel`},
     {k:'pocket', name:'Tartalék-zsebek', v:m.pockets, c:'--c-pocket', sub:'ritka költségekre'},
     {k:'erste',  name:'Megtakarítások', v:m.savings, c:'--c-erste', tag:'nem költés', sub:S.savings.filter(x => x.monthly).map(x => x.name).join(', ')},
     {k:'var',    name:'Változó keret', v:m.variable, c:'--c-var', sub: m.spent ? `eddig ${ft(m.spent)}` : 'kaja, evés, szórakozás, közlekedés…'},
     {k:'rel', name:'Törölt zsebből visszakerült', v:-m.released, c:'--c-plus', sub:'a hó végi pluszhoz adva'},
     {k:'extra',  name:'Rendkívüli', v:m.extra, c:'--bad', sub:'kereten kívül'},
-    {k:'plus',   name:'Plusz a célkasszába', v:Math.max(0,m.plus), c:'--c-plus'}
-  ].filter(x => (x.k !== 'extra' && x.k !== 'erste' && x.k !== 'rel') || x.v !== 0);
-  const bar = parts.map(x => `<span style="width:${Math.max(0,x.v)/st.salary*100}%;background:var(${x.c})" title="${esc(x.name)}"></span>`).join('');
+    {k:'plus',   name:'Plusz az Előző havi megtakarításokba', v:Math.max(0,m.plus), c:'--c-plus'}
+  ].filter(x => (x.k !== 'extra' && x.k !== 'erste' && x.k !== 'rel' && x.k !== 'inc') || x.v !== 0);
+  const bar = parts.map(x => `<span style="width:${Math.max(0,x.v)/(st.salary + m.income)*100}%;background:var(${x.c})" title="${esc(x.name)}"></span>`).join('');
   const rows = parts.filter(x => x.k !== 'plus').map(x => `
     <div class="row"><i class="dot" style="background:var(${x.c})"></i>
       <div class="name">${esc(x.name)}${x.tag?`<span class="tag">${x.tag}</span>`:''}${x.sub?`<small>${esc(x.sub)}</small>`:''}</div>
@@ -719,7 +746,7 @@ function viewHome(){
   const fill = Math.min(100, b.used * 100);
   return header(cap(p.name), `${dShort(p.start)} – ${dShort(p.end)}`) + `
   <section class="hero" aria-label="Várható plusz">
-    <span class="label">Hó végi plusz a célkasszába</span>
+    <span class="label">Hó végi plusz → Előző havi megtakarítások</span>
     <span class="big num ${m.plus<0?'neg':''}">${ft(m.plus)}</span>
     <span class="hours num">${hrs(Math.abs(m.plus))} munkád értéke</span>
     ${b.left > 0 ? `<span class="extra num">+ amennyit a maradék ${ft(b.left)}-ból megspórolsz</span>` : ''}
@@ -729,6 +756,8 @@ function viewHome(){
       <span class="chip">Mostani tempóval <b class="num">${ft(pacePlus)}</b></span>
     </div>
   </section>
+
+  ${accountsCard(p, m)}
 
   <section class="card budget ${b.state}" aria-label="Változó keret">
     <div class="budget-top">
@@ -748,6 +777,34 @@ function viewHome(){
   ${recentCard(p)}
 
   ${S.sheet.rows.length ? `<p class="soon">A táblázat kapcsolata ki van kapcsolva. A régi, átmásolt tételek megmaradtak.</p>` : ''}`;
+}
+
+function accountsCard(p, m){
+  const list = twoAcc() ? accounts(p, m) : null, inc = periodIncome(p);
+  return `<section class="card" aria-label="Számlák">
+    ${list ? `<div class="acc-two">${list.map(x => `<div><span class="label">${esc(x.name)}</span>
+      <div class="st-num num ${x.now < 0 ? 'neg' : ''}">${ft(x.now)}</div><small>most szabadon · bejött ${ft(x.in)}</small>
+      <small class="num">hó végén várhatóan ${ft(x.end)}</small></div>`).join('')}</div>` : ''}
+    ${inc.length ? `<div class="rows">${inc.map(x => `<div class="row fx sv"><div class="name">${esc(x.name || 'Egyéb bevétel')}<small>${dShort(new Date(x.date + 'T12:00'))}</small></div>
+      <div class="val">+${ft(x.amount)}<button class="del ${incDelArm === x.id ? 'armed' : ''}" data-inc-del="${x.id}">${incDelArm === x.id ? 'Biztos?' : 'Törlés'}</button></div></div>`).join('')}</div>` : ''}
+    <button class="btn" data-inc-new>+ Egyéb bevétel</button>
+  </section>`;
+}
+function incForm(){
+  return `<div class="fx-form">
+    <label class="sc-f sc-wide"><span>Megnevezés</span><input id="in-name" type="text" placeholder="pl. talált pénz" autocomplete="off"></label>
+    <label class="sc-f"><span>Összeg (Ft)</span><input id="in-amount" class="num" type="text" inputmode="numeric"></label>
+    <label class="sc-f"><span>Dátum</span><input id="in-date" type="date" value="${ymd(new Date())}"></label>
+    ${twoAcc() ? `<p class="soon sc-wide">A(z) ${esc(accName('A'))} egyenlegéhez adódik.</p>` : ''}
+    <div class="sc-actions sc-wide"><button class="btn" data-inc-cancel>Mégse</button><button class="btn primary" data-inc-save>Hozzáadás</button></div>
+  </div>`;
+}
+function saveIncome(){
+  const amount = numIn('in-amount'), date = document.getElementById('in-date').value || ymd(new Date());
+  const name = document.getElementById('in-name').value.trim() || 'Egyéb bevétel';
+  if(!amount){ toast('Adj meg összeget', false); return; }
+  S.income.push({ id:uid(), date, amount, name }); incEdit = false; save(); render();
+  toast(`${ft(amount)} hozzáadva a bevételhez`, false);
 }
 
 let showAll = false, recentOpen = false, pendingDelete = null, splitMode = null;
@@ -958,6 +1015,7 @@ function fixForm(f){
     <label class="sc-f sc-wide"><span>Megnevezés</span><input id="fx-name" type="text" value="${esc(f.name || '')}" autocomplete="off"></label>
     <label class="sc-f"><span>Összeg / hó (Ft)</span><input id="fx-amount" class="num" type="text" inputmode="numeric" value="${f.amount || ''}"></label>
     <label class="sc-f"><span>Esedékes (hó napja)</span><input id="fx-due" class="num" type="text" inputmode="numeric" placeholder="nem kötelező" value="${f.due || ''}"></label>
+    ${twoAcc() ? `<label class="sc-f sc-wide"><span>Melyik számláról megy?</span><select id="fx-acc"><option value="A">${esc(accName('A'))}</option><option value="B" ${f.acc === 'B' ? 'selected' : ''}>${esc(accName('B'))}</option></select></label>` : ''}
     <div class="sc-actions sc-wide">
       ${f.id ? `<button class="btn ${fixDelArm ? 'solid-danger' : 'danger'}" data-fx-del>${fixDelArm ? 'Biztosan törlöd?' : 'Törlés'}</button>` : `<button class="btn" data-fx-cancel>Mégse</button>`}
       <button class="btn primary" data-fx-save>Mentés</button>
@@ -975,6 +1033,7 @@ function viewFix(){
     <span class="label">Havi fix költségek</span>
     <span class="big num fx-big">${ft(total)}</span>
     <span class="hours num">${hrs(total)} munka havonta · kifizetve ${ft(paidSum)}, hátra ${ft(total - paidSum)}</span>
+    ${twoAcc() ? `<span class="hours num">${['A', 'B'].map(k => `${esc(accName(k))}: ${ft(sum(S.fixed.filter(f => fixAcc(f) === k), f => f.amount))}`).join(' · ')}</span>` : ''}
   </section>
   <section class="card">
     <div class="rows">${list.map(({ f, paid, due }) => {
@@ -983,7 +1042,7 @@ function viewFix(){
         : due ? `<small class="${late ? 'late' : ''}">${late ? 'lejárt' : 'esedékes'}: ${dShort(due)}</small>` : '<small>nincs esedékesség megadva</small>';
       return `<div class="row fx ${late ? 'is-late' : ''}">
         <button class="check ${paid ? 'on' : ''}" data-fx-paid="${f.id}" aria-pressed="${!!paid}" aria-label="${esc(f.name)} kifizetve">${paid ? '✓' : ''}</button>
-        <button class="name fx-open" data-fx-edit="${f.id}">${esc(f.name)}${sub}</button>
+        <button class="name fx-open" data-fx-edit="${f.id}">${esc(f.name)}${twoAcc() ? `<span class="tag">${esc(accName(fixAcc(f)))}</span>` : ''}${sub}</button>
         <div class="val">${ft(f.amount)}<small>${hrs(f.amount)}</small></div></div>`;
     }).join('')}
 </div>
@@ -998,8 +1057,9 @@ function saveFix(){
   let due = Math.round(Number(document.getElementById('fx-due').value.replace(/[^\d]/g, ''))) || null;
   if(due) due = Math.min(31, Math.max(1, due));
   if(!name || !amount){ toast('Adj meg nevet és összeget', false); return; }
-  if(fixEdit === 'new') S.fixed.push({ id:uid(), name, amount, due });
-  else { const f = S.fixed.find(x => x.id === fixEdit); if(f) Object.assign(f, { name, amount, due }); }
+  const accEl = document.getElementById('fx-acc');
+  if(fixEdit === 'new') S.fixed.push({ id:uid(), name, amount, due, acc:accEl ? accEl.value : 'A' });
+  else { const f = S.fixed.find(x => x.id === fixEdit); if(f) Object.assign(f, { name, amount, due }, accEl ? { acc:accEl.value } : {}); }
   fixEdit = null; fixDelArm = false; save(); render();
 }
 function togglePaid(key, amount){
@@ -1102,12 +1162,12 @@ function viewStat(){
   parts.push({ k:'_fix', name:'Fix költségek', v:m.fixed, c:CAT_COLOR._fix });
   if(pocketOut) parts.push({ k:'_zseb', name:'Zsebből fizetve', v:pocketOut, c:CAT_COLOR._zseb });
   const list = parts.filter(x => x.v > 0).sort((x, y) => y.v - x.v);
-  const total = sum(list, x => x.v), net = st.salary - total;
+  const total = sum(list, x => x.v), income = st.salary + m.income, net = income - total;
   const bar = list.map(x => `<span style="flex:${x.v} 1 0;background:${x.c}" title="${esc(x.name)}"></span>`).join('');
   const leg = list.map(x => `<div class="st-leg"><i style="background:${x.c}"></i><span>${esc(x.name)}</span><b class="num">${ft(x.v)}</b><small>${Math.round(x.v / (total || 1) * 100)}%</small></div>`).join('');
   const leftPct = Math.max(0, Math.round(b.left / (st.budget || 1) * 100));
   const setRows = [
-    { name:'Célkassza, fix félretétel', v:st.goalSaving, c:'--c-goal' },
+    { name:'Megtakarítás', v:st.goalSaving, c:'--c-goal' },
     { name:'Tartalék-zsebek', v:m.pockets, c:'--c-pocket', sub:S.pockets.filter(z => z.startKey <= p.key).map(z => `${z.name} ${ft(z.monthly)}`).join(', ') },
     ...S.savings.filter(v => v.monthly).map(v => ({ name:v.name, v:v.monthly, c:'--c-erste', sub:'megtakarítás' }))
   ].filter(x => x.v > 0);
@@ -1121,14 +1181,14 @@ function viewStat(){
     <span class="hours num" style="color:var(--muted);font-size:.9rem">${hrs(total)} munka</span>
     <div class="st-bar">${bar}</div>
     <div class="st-legend">${leg}</div>
-    <p class="soon">A megtakarítások és a célkassza nem kiadás, ezért nincsenek benne.</p>
+    <p class="soon">A megtakarítások nem kiadás, ezért nincsenek benne.</p>
   </section>
   <div class="st-two">
-    <section class="card"><span class="label">Bevétel</span><div class="st-num num">${ft(st.salary)}</div><span style="color:var(--muted);font-size:.85rem">havi fizetés</span>
+    <section class="card"><span class="label">Bevétel</span><div class="st-num num">${ft(income)}</div><span style="color:var(--muted);font-size:.85rem">havi fizetés${m.income ? ` + ${ft(m.income)} egyéb` : ''}</span>
       <div class="st-line"><span style="width:100%;background:var(--good)"></span></div></section>
     <section class="card"><span class="label">Nettó pénzforgalom</span><div class="st-num num">${ft(net)}</div><span class="${net >= 0 ? 'st-pos' : 'st-neg'}">${net >= 0 ? '⊕ Pozitív' : '⊖ Negatív'}</span>
       <div class="st-line"><span style="width:100%;background:var(--good)"></span></div>
-      <div class="st-line"><span style="width:${Math.min(100, total / (st.salary || 1) * 100)}%;background:var(--bad)"></span></div></section>
+      <div class="st-line"><span style="width:${Math.min(100, total / (income || 1) * 100)}%;background:var(--bad)"></span></div></section>
   </div>
   <section class="card">
     <span class="label">Havi félretételek</span>
@@ -1148,7 +1208,7 @@ function viewStat(){
 }
 
 /* ---------- tartalék-zsebek ---------- */
-let zsEdit = null, zsDelArm = false, zsPayArm = null;
+let zsEdit = null, zsDelArm = false, zsPay = null, zsUndoArm = null;
 const zsBalance = z => (z.balance || 0) + sum(Object.values(z.credits || {}), x => x) - sum(z.log || [], x => x.amount);
 const addMonths = (d, n) => { const x = new Date(d + 'T12:00'); const day = x.getDate(); x.setDate(1); x.setMonth(x.getMonth() + n); x.setDate(Math.min(day, new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate())); return ymd(x); };
 /* minden hónap (fizetésnaptól) jóváírja a zseb havi összegét; a már jóváírt hónapok nem változnak, ha az árat átírod */
@@ -1181,7 +1241,7 @@ function viewZseb(){
     const bal = zsBalance(z), next = z.next ? new Date(z.next + 'T12:00') : null;
     let months = 0; if(next){ let q = periodOf(); while(q.next <= next && months < 24){ months++; q = periodOf(q.next); } }
     const atBuy = bal + months * z.monthly, ok = atBuy >= z.price;
-    const due = next && daysUntil(next) <= 0;
+    const due = next && daysUntil(next) <= 0, li = (z.log || []).length - 1, last = z.log[li];
     return `<div class="zs">
       <div class="row fx sv">
         <button class="name fx-open" data-zs-edit="${z.id}">${esc(z.name)}<small>${ft(z.price)} ${z.every === 1 ? 'havonta' : z.every + ' havonta'} → ${ft(z.monthly)} / hó${z.startKey > p.key ? ` · ${cap(HU_MONTHS[+z.startKey.slice(5) - 1])}tól` : ''}</small></button>
@@ -1189,8 +1249,10 @@ function viewZseb(){
       <div class="zs-bar"><span style="width:${Math.min(100, Math.max(0, bal / (z.price || 1) * 100))}%"></span></div>
       <div class="zs-foot">
         <span class="${ok ? 'paid' : 'late'}">${next ? `${due ? 'Esedékes' : 'Következő'}: ${dShort(next)} · ${ok ? 'elég lesz' : `hiányzik ${ft(z.price - atBuy)}`}` : 'nincs dátum'}</span>
-        <button class="btn ${zsPayArm === z.id ? 'primary' : ''}" data-zs-pay="${z.id}">${zsPayArm === z.id ? `Levonod a ${ft(z.price)}-ot?` : 'Megvettem'}</button>
-      </div></div>`;
+        <button class="btn" data-zs-pay="${z.id}">Megvettem</button>
+      </div>
+      ${last ? `<div class="zs-last num"><span>Utolsó kifizetés: ${dShort(new Date(last.date + 'T12:00'))} · ${ft(last.amount)}</span>
+        <button class="linkbtn ${zsUndoArm === z.id ? 'danger-txt' : ''}" data-zs-undo="${z.id}|${li}">${zsUndoArm === z.id ? 'Biztosan visszavonod?' : 'Visszavonás'}</button></div>` : ''}</div>`;
   }).join('');
   return header('Tartalék-zsebek', 'ritka költségekre') + `
   <section class="hero">
@@ -1200,7 +1262,7 @@ function viewZseb(){
   </section>
   <section class="card"><div class="rows">${rows}</div>
     <button class="btn" data-zs-edit="new">+ Új zseb</button>
-    <p class="soon">Koppints a névre a szerkesztéshez. A havi összeg minden hónap ${S.settings.payday}-án gyűlik. A „Megvettem” a zsebből vonja le az árat, nem a változó keretből, és a következő dátum magától továbblép.</p>
+    <p class="soon">Koppints a névre a szerkesztéshez. A havi összeg minden hónap ${S.settings.payday}-án gyűlik. A „Megvettem” a zsebből vonja le a fizetett összeget, nem a változó keretből, és a következő dátum magától továbblép. Ha több, mint ami a zsebben van, nem engedi mínuszba. A kifizetést visszavonhatod.</p>
   </section>`;
 }
 const numIn = id => Math.round(Number((document.getElementById(id) || {value:''}).value.replace(/[^\d]/g, ''))) || 0;
@@ -1213,16 +1275,39 @@ function saveZseb(){
   else { const z = S.pockets.find(x => x.id === zsEdit); if(z) Object.assign(z, { name, price, every, monthly, next }); /* a már jóváírt hónapok összege nem változik */ }
   zsEdit = null; zsDelArm = false; save(); render();
 }
-function payZseb(id){
-  const z = S.pockets.find(x => x.id === id); if(!z) return;
-  z.log.push({ date:ymd(new Date()), amount:z.price });
-  z.next = addMonths(z.next || ymd(new Date()), z.every);
-  zsPayArm = null; save(); render(); toast(`${z.name}: ${ft(z.price)} levonva a zsebből`, false);
+function zsPayForm(z){
+  const bal = zsBalance(z);
+  return `<div class="fx-form">
+    <p class="soon sc-wide">A zsebben most <b class="num">${ft(bal)}</b> van.</p>
+    <label class="sc-f"><span>Fizetett összeg (Ft)</span><input id="zp-amount" class="num" type="text" inputmode="numeric" value="${z.price}"></label>
+    <label class="sc-f"><span>Dátum</span><input id="zp-date" type="date" value="${ymd(new Date())}"></label>
+    <p class="form-msg" id="zp-msg">${z.price > bal ? `Figyelem: a tervezett ár (${ft(z.price)}) több, mint ami a zsebben van.` : ''}</p>
+    <div class="sc-actions sc-wide"><button class="btn" data-zs-cancel>Mégse</button><button class="btn primary" data-zp-save>Levonás a zsebből</button></div>
+  </div>`;
+}
+/* a zseb nem mehet mínuszba: ha nincs benne elég, figyelmeztet és nem vonja le */
+function payZseb(){
+  const z = S.pockets.find(x => x.id === zsPay); if(!z) return;
+  const amount = numIn('zp-amount'), date = document.getElementById('zp-date').value || ymd(new Date()), bal = zsBalance(z);
+  const msg = document.getElementById('zp-msg');
+  if(!amount){ msg.textContent = 'Adj meg összeget.'; return; }
+  if(amount > bal){ msg.textContent = `Nincs elég pénz a zsebben: ${ft(bal)} van benne, ${ft(amount - bal)} hiányzik. A zseb nem mehet mínuszba.`; return; }
+  z.log.push({ date, amount, prevNext:z.next || null });
+  z.next = addMonths(z.next || date, z.every);
+  zsPay = null; save(); render(); toast(`${z.name}: ${ft(amount)} levonva a zsebből`, false);
+}
+/* visszavonás: az összeg visszakerül a zsebbe, és ha ez volt az utolsó kifizetés, a következő dátum is visszaáll */
+function undoZseb(id, i){
+  const z = S.pockets.find(x => x.id === id); if(!z || !z.log[i]) return;
+  const [l] = z.log.splice(i, 1);
+  if(i === z.log.length && 'prevNext' in l) z.next = l.prevNext;
+  zsUndoArm = null; save(); render(); toast(`${z.name}: ${ft(l.amount)} visszakerült a zsebbe`, false);
 }
 
 /* ---------- célok ---------- */
 let glEdit = null, glPayArm = null, glDelArm = false, phEdit = null, phDelArm = false;
-/* célkassza: kezdő egyenleg + minden új hónap fix félretétele + a lezárt hónapok pluszai − megvett tételek */
+/* Megtakarítás (célkassza): kezdő egyenleg + minden új hónap fix félretétele − megvett tételek.
+   A lezárt hónapok pluszai (closed) az Előző havi megtakarításokba kerülnek. */
 function goalSync(){
   const g = S.goalFund, cur = periodOf(); let changed = false;
   if(!g.baseKey){ g.baseKey = cur.key; changed = true; }
@@ -1236,7 +1321,8 @@ function goalSync(){
   if(changed) writeLocal(); /* automatikus jóváírás: nem számít új mentésnek, így nem írja felül a frissebb felhős adatot */
 }
 const goalItems = () => S.phases.flatMap(ph => ph.items);
-const goalBalance = () => { const g = S.goalFund; return g.start + sum(Object.values(g.credits || {}), x => x) + sum(Object.values(g.closed || {}), x => x) - sum(goalItems().filter(i => i.paid), i => i.paid.price) - (g.removed || 0); };
+const prevBalance = () => sum(Object.values(S.goalFund.closed || {}), x => x);
+const goalBalance = () => { const g = S.goalFund; return g.start + sum(Object.values(g.credits || {}), x => x) - sum(goalItems().filter(i => i.paid), i => i.paid.price) - (g.removed || 0); };
 const phaseDone = ph => ph.items.every(i => i.paid);
 const phaseById = id => S.phases.find(x => x.id === id);
 const unlockers = ph => (ph.unlockBy || []).map(phaseById).filter(Boolean);
@@ -1285,10 +1371,10 @@ function viewCel(){
   let est = '';
   if(open){
     const need = sum(open.items.filter(i => !i.paid), i => i.price), gap = need - bal;
-    const pace = S.settings.goalSaving + Math.max(0, m.plus);
-    if(gap <= 0) est = `A(z) „${esc(open.name)}” hátralévő ${ft(need)}-ja már most megvan a célkasszában.`;
+    const pace = S.settings.goalSaving;
+    if(gap <= 0) est = `A(z) „${esc(open.name)}” hátralévő ${ft(need)}-ja már most megvan a Megtakarításban.`;
     /* 0 Ft-os tempónál nem számolunk (korábban ez a ciklus milliószor futott és lefagyasztotta az appot) */
-    else if(pace <= 0) est = `A(z) „${esc(open.name)}” hátralévő ${ft(need)}-jához még ${ft(gap)} kell. A mostani tempóval (0 Ft / hó) nem gyűlik össze: állíts be célfélretételt, vagy legyen hó végi plusz.`;
+    else if(pace <= 0) est = `A(z) „${esc(open.name)}” hátralévő ${ft(need)}-jához még ${ft(gap)} kell. A mostani tempóval (0 Ft / hó) nem gyűlik össze: állíts be havi megtakarítást a Beállításokban.`;
     else if(Math.ceil(gap / pace) > 600) est = `A(z) „${esc(open.name)}” hátralévő ${ft(need)}-jához még ${ft(gap)} kell. A mostani tempóval (${ft(pace)} / hó) ez több mint 50 év.`;
     else { const n = Math.ceil(gap / pace); let q = p; for(let i = 0; i < n; i++) q = periodOf(q.next);
       est = `A(z) „${esc(open.name)}” hátralévő ${ft(need)}-jához még ${ft(gap)} kell. A mostani tempóval (${ft(pace)} / hó) ${q.start.getFullYear()}. ${q.name} 6-ra lesz meg.`; }
@@ -1308,17 +1394,17 @@ function viewCel(){
       <button class="linkbtn" data-gl-add="${ph.id}">+ Tétel hozzáadása</button>
     </section>`;
   }).join('');
-  return header('Célok', 'fázisonként, a célkasszából') + `
+  return header('Célok', 'fázisonként, a Megtakarításból') + `
   <section class="hero">
-    <span class="label">Célkasszában most</span>
+    <span class="label">Megtakarításban most</span>
     <span class="big num ${bal < 0 ? 'neg' : ''}">${ft(bal)}</span>
     <span class="hours num">${hrs(Math.abs(bal))} munkád értéke</span>
-    <span class="extra num">+ ebben a hónapban várhatóan ${ft(Math.max(0, m.plus))} plusz, és minden hónap ${S.settings.payday}-án ${ft(S.settings.goalSaving)} fix félretétel</span>
+    <span class="extra num">+ minden hónap ${S.settings.payday}-án ${ft(S.settings.goalSaving)} fix félretétel</span>
   </section>
   ${est ? `<section class="card"><span class="label">Becslés</span><p style="margin:0">${est}</p></section>` : ''}
   ${phases || `<section class="card"><p class="soon">Még nincs célod. Vegyél fel egy fázist, majd tegyél bele tételeket.</p></section>`}
   <button class="btn" data-ph-add style="width:100%">+ Fázis hozzáadása</button>
-  <p class="soon">A fázis nevére koppintva átnevezheted, zárolhatod vagy törölheted. Koppints a körre, ha megvetted (a tervezett ár levonódik a célkasszából), újra koppintva visszavonod. A névre koppintva átírhatod az árat, kipipált tételnél a ténylegesen kifizetett összeget.</p>`;
+  <p class="soon">A fázis nevére koppintva átnevezheted, zárolhatod vagy törölheted. Koppints a körre, ha megvetted (a tervezett ár levonódik a Megtakarításból), újra koppintva visszavonod. A névre koppintva átírhatod az árat, kipipált tételnél a ténylegesen kifizetett összeget.</p>`;
 }
 function saveGoal(){
   const name = document.getElementById('gl-name').value.trim(), price = numIn('gl-price');
@@ -1327,6 +1413,29 @@ function saveGoal(){
   const it = goalItems().find(i => i.id === glEdit); if(!it) return;
   it.name = name; if(it.paid) it.paid.price = price; else it.price = price;
   glEdit = null; save(); render();
+}
+
+/* ---------- Megtakarítás fül ---------- */
+function viewMt(){
+  goalSync();
+  const st = S.settings, bal = goalBalance(), prev = prevBalance(), m = monthPlan(periodOf());
+  const used = sum(goalItems().filter(i => i.paid), i => i.paid.price) + (S.goalFund.removed || 0);
+  const months = Object.entries(S.goalFund.closed || {}).filter(([, v]) => v > 0).sort((a, b) => b[0].localeCompare(a[0]));
+  return header('Megtakarítás', 'nem költés') + `
+  <section class="hero">
+    <span class="label">Megtakarítva összesen</span>
+    <span class="big num fx-big">${ft(bal + prev)}</span>
+    <span class="hours num">${hrs(Math.abs(bal + prev))} munkád értéke</span>
+  </section>
+  <section class="card">
+    <div class="budget-top"><div><span class="label">Megtakarítás</span><div class="left num ${bal < 0 ? 'neg' : ''}">${ft(bal)}</div></div><span class="tag">${ft(st.goalSaving)} / hó</span></div>
+    <p class="soon">Minden hónap ${st.payday}-án ${ft(st.goalSaving)} kerül ide. Ebből fizeted a Célok tételeit${used ? ` (eddig ${ft(used)})` : ''}.</p>
+  </section>
+  <section class="card">
+    <div class="budget-top"><div><span class="label">Előző havi megtakarítások</span><div class="left num">${ft(prev)}</div></div></div>
+    ${months.length ? `<div class="rows">${months.map(([k, v]) => `<div class="row fx sv"><div class="name">${k.slice(0, 4)}. ${HU_MONTHS[+k.slice(5) - 1]}</div><div class="val">${ft(v)}</div></div>`).join('')}</div>` : ''}
+    <p class="soon">A hónap végén megmaradt pénz magától ide kerül. Ebben a hónapban várhatóan ${ft(Math.max(0, m.plus))}.</p>
+  </section>`;
 }
 
 function viewSetup(){
@@ -1339,8 +1448,8 @@ function viewSetup(){
   </div></section>
   <section class="card"><h2>Havi keretek</h2><div>
     ${f('su-budget','Változó költségek kerete','Ft / hó · kaja, evés, szórakozás…')}
-    ${f('su-goal','Célkasszába fixen','Ft / hó · ha nem teszel félre célra, hagyd üresen')}
-    ${f('su-fund','Célkassza kezdő egyenlege','Ft · ami most már megvan')}
+    ${f('su-goal','Megtakarításba fixen','Ft / hó · ebből fizeted a célokat; ha nem teszel félre, hagyd üresen')}
+    ${f('su-fund','Megtakarítás kezdő egyenlege','Ft · ami most már megvan')}
   </div></section>
   <p class="soon" id="su-msg"></p>
   <button class="btn primary" data-setup-save style="width:100%">Kezdés</button>
@@ -1377,11 +1486,18 @@ function viewBeall(){
       ${num('s-payday','Fizetésnap', st.payday, `a hónap ${st.payday}. napjától a következő hó ${st.payday>1 ? (st.payday-1)+'. napjáig' : 'végéig'} tart`)}
     </div>
   </section>
+  <section class="card"><h2>Két számla</h2>
+    <div>
+      <div class="field"><label for="s-accA">Fő számla neve<small>ide megy a fizetés egy része és az egyéb bevétel</small></label><input id="s-accA" type="text" placeholder="Fő számla" value="${esc(st.accA)}"></div>
+      ${num('s-accain','Ennyi megy a fő számlára', st.accAIn, `Ft / hó · ha 0, nincs felosztás${st.accAIn > 0 && st.accAIn < st.salary ? ` · a másikon marad ${ft(st.salary - st.accAIn)}` : ''}`)}
+      <div class="field"><label for="s-accB">Másik számla neve<small>itt marad a fizetés többi része</small></label><input id="s-accB" type="text" placeholder="Másik számla" value="${esc(st.accB)}"></div>
+    </div>
+  </section>
   <section class="card"><h2>Havi keretek</h2>
     <div>
-      ${num('s-goal','Célkasszába fixen', st.goalSaving, 'minden fizetéskor')}
+      ${num('s-goal','Megtakarításba fixen', st.goalSaving, 'minden fizetéskor, ebből fizeted a célokat')}
       ${num('s-budget','Változó költségek kerete', st.budget, 'kaja, evés, szórakozás…')}
-      ${num('s-fund','Célkassza kezdő egyenlege', S.goalFund.start, 'ami a célokra már megvan')}
+      ${num('s-fund','Megtakarítás kezdő egyenlege', S.goalFund.start, 'ami a célokra már megvan')}
     </div>
   </section>
   <section class="card"><h2>Adatok</h2>
@@ -1402,7 +1518,7 @@ function viewBeall(){
 }
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 
-const VIEWS = { home:viewHome, fix:viewFix, zseb:viewZseb, stat:viewStat, cel:viewCel, beall:viewBeall };
+const VIEWS = { home:viewHome, fix:viewFix, zseb:viewZseb, mt:viewMt, stat:viewStat, cel:viewCel, beall:viewBeall };
 /* Koppintás közben nem rajzoljuk újra az oldalt: ha az ujj alatti gomb eltűnik, egyes telefonokon
    a további érintések elvesznek (az alsó sáv nem reagál). Ezért kattintás alatt a rajzolás egy pillanattal később fut. */
 let inTap = false, renderTimer = null;
@@ -1440,6 +1556,8 @@ function editContent(){
   if(tab === 'cel' && phEdit){ const ph = phaseById(phEdit); return ph ? ['Fázis', phForm(ph)] : null; }
   if(tab === 'cel' && glEdit && glEdit.startsWith('new:')){ const ph = phaseById(glEdit.slice(4)); return ph ? [`Új tétel: ${esc(ph.name)}`, glForm({})] : null; }
   if(tab === 'cel' && glEdit){ const it = goalItems().find(i => i.id === glEdit); return it ? [esc(it.name), glForm(it)] : null; }
+  if(tab === 'home' && incEdit) return ['Egyéb bevétel', incForm()];
+  if(tab === 'zseb' && zsPay){ const z = S.pockets.find(x => x.id === zsPay); return z ? [`Kifizetés: ${esc(z.name)}`, zsPayForm(z)] : null; }
   if(tab === 'zseb' && zsEdit) return [zsEdit === 'new' ? 'Új zseb' : 'Zseb', zsForm(zsEdit === 'new' ? {} : S.pockets.find(x => x.id === zsEdit) || {})];
   return null;
 }
@@ -1451,7 +1569,7 @@ function renderEdit(){
   el.hidden = false; document.body.classList.add('locked');
   if(wasHidden){ const f = el.querySelector('input'); if(f) setTimeout(() => f.focus(), 30); }
 }
-function closeEdit(){ glEdit = null; glDelArm = false; phEdit = null; phDelArm = false; fixEdit = null; svEdit = null; svDep = null; zsEdit = null; fixDelArm = false; svDelArm = false; zsDelArm = false; render(); }
+function closeEdit(){ incEdit = false; zsPay = null; glEdit = null; glDelArm = false; phEdit = null; phDelArm = false; fixEdit = null; svEdit = null; svDep = null; zsEdit = null; fixDelArm = false; svDelArm = false; zsDelArm = false; render(); }
 function renderStatus(){
   const el = document.getElementById('sync'); if(!el) return;
   el.innerHTML = !FB_CONFIG ? `<i></i>Mentve ebben a böngészőben`
@@ -1462,7 +1580,7 @@ function applyTheme(){
   const t = S.settings.theme, r = document.documentElement;
   if(t === 'light' || t === 'dark') r.setAttribute('data-theme', t); else r.removeAttribute('data-theme');
 }
-function go(t){ tab = t; confirmReset = false; fixEdit = null; svEdit = null; svDep = null; zsEdit = null; zsPayArm = null; glEdit = null; glPayArm = null; glDelArm = false; phEdit = null; phDelArm = false; try{ history.replaceState(null,'', t==='home' ? location.pathname : '#'+t); }catch(e){} render(); window.scrollTo(0,0); }
+function go(t){ tab = t; confirmReset = false; fixEdit = null; svEdit = null; svDep = null; zsEdit = null; zsPay = null; zsUndoArm = null; incEdit = false; incDelArm = null; glEdit = null; glPayArm = null; glDelArm = false; phEdit = null; phDelArm = false; try{ history.replaceState(null,'', t==='home' ? location.pathname : '#'+t); }catch(e){} render(); window.scrollTo(0,0); }
 
 /* ---------- események ---------- */
 document.addEventListener('click', e => {
@@ -1475,7 +1593,8 @@ document.addEventListener('click', e => {
   }
   if(pendingDelete && !b.dataset.del){ pendingDelete = null; }
   if(svDepDel && !b.dataset.sdDel){ svDepDel = null; }
-  if(zsPayArm && b.dataset.zsPay !== zsPayArm){ zsPayArm = null; }
+  if(zsUndoArm && !(b.dataset.zsUndo || '').startsWith(zsUndoArm + '|')){ zsUndoArm = null; }
+  if(incDelArm && b.dataset.incDel !== incDelArm){ incDelArm = null; }
   if(glPayArm && b.dataset.glPay !== glPayArm){ glPayArm = null; }
   if(glDelArm && !('glDel' in b.dataset)) glDelArm = false;
   if(phDelArm && !('phDel' in b.dataset)) phDelArm = false;
@@ -1492,19 +1611,26 @@ document.addEventListener('click', e => {
     phEdit = null; phDelArm = false; save(); render(); return toast('Fázis törölve', false); }
   if('glCancel' in b.dataset){ glEdit = null; return render(); }
   if('glSave' in b.dataset) return saveGoal();
-  if('glUnpay' in b.dataset){ const it = goalItems().find(i => i.id === glEdit); if(it){ it.paid = null; } glEdit = null; save(); render(); return toast('Visszaállítva, az ár visszakerült a célkasszába', false); }
+  if('glUnpay' in b.dataset){ const it = goalItems().find(i => i.id === glEdit); if(it){ it.paid = null; } glEdit = null; save(); render(); return toast('Visszaállítva, az ár visszakerült a Megtakarításba', false); }
   if(b.dataset.glPay){ const it = goalItems().find(i => i.id === b.dataset.glPay); if(!it) return;
     /* egy koppintás: pipa be / ki; a levont összeg alapból a tervezett ár */
     if(it.paid){ it.paid = null; save(); render(); return toast(`${it.name}: pipa levéve, ${ft(it.price)} visszakerült`, false); }
-    it.paid = { date:ymd(new Date()), price:it.price }; save(); render(); return toast(`${it.name}: ${ft(it.price)} levonva a célkasszából`, false); }
+    it.paid = { date:ymd(new Date()), price:it.price }; save(); render(); return toast(`${it.name}: ${ft(it.price)} levonva a Megtakarításból`, false); }
   if(b.dataset.zsEdit){ zsEdit = b.dataset.zsEdit; zsDelArm = false; return render(); }
-  if('zsCancel' in b.dataset){ zsEdit = null; zsDelArm = false; return render(); }
+  if('zsCancel' in b.dataset){ zsEdit = null; zsPay = null; zsDelArm = false; return render(); }
   if('zsSave' in b.dataset) return saveZseb();
   if('zsDel' in b.dataset){ if(!zsDelArm){ zsDelArm = true; return render(); }
     const z = S.pockets.find(x => x.id === zsEdit), bal = z ? zsBalance(z) : 0;
     S.pockets = S.pockets.filter(x => x.id !== zsEdit); zsEdit = null; zsDelArm = false; save(); render();
     return toast('Zseb törölve', false); }
-  if(b.dataset.zsPay){ if(zsPayArm !== b.dataset.zsPay){ zsPayArm = b.dataset.zsPay; return render(); } return payZseb(b.dataset.zsPay); }
+  if(b.dataset.zsPay){ zsPay = b.dataset.zsPay; return render(); }
+  if('zpSave' in b.dataset) return payZseb();
+  if(b.dataset.zsUndo){ const [zid, i] = b.dataset.zsUndo.split('|'); if(zsUndoArm !== zid){ zsUndoArm = zid; return render(); } return undoZseb(zid, +i); }
+  if('incNew' in b.dataset){ incEdit = true; return render(); }
+  if('incCancel' in b.dataset){ incEdit = false; return render(); }
+  if('incSave' in b.dataset) return saveIncome();
+  if(b.dataset.incDel){ if(incDelArm !== b.dataset.incDel){ incDelArm = b.dataset.incDel; return render(); }
+    S.income = S.income.filter(x => x.id !== b.dataset.incDel); incDelArm = null; save(); render(); return toast('Bevétel törölve', false); }
   if('reload' in b.dataset){ try{ localStorage.removeItem(LS_KEY); }catch(_){} return location.reload(); }
   if('keepLocal' in b.dataset){ cloud.ref.get().then(s => { cloud.base = s.exists ? (s.data().updatedAt || 0) : 0; cloud.conflict = false; const el = document.getElementById('conflict'); if(el) el.remove(); save(); toast('Ennek az eszköznek az adatai mentve a felhőbe', false); }); return; }
   if('signIn' in b.dataset) return signIn();
@@ -1561,7 +1687,8 @@ document.addEventListener('click', e => {
   if('resetYes' in b.dataset){ const theme = S.settings.theme; S = hydrate(null); S.settings.theme = theme; confirmReset = false; save(); needSetup = true; return render(); }
 });
 const FIELD = { 's-salary':['settings','salary'], 's-hours':['settings','hours'], 's-rate':['settings','rate'], 's-payday':['settings','payday'],
-  's-goal':['settings','goalSaving'], 's-budget':['settings','budget'], 's-fund':['goalFund','start'] };
+  's-goal':['settings','goalSaving'], 's-budget':['settings','budget'], 's-fund':['goalFund','start'], 's-accain':['settings','accAIn'] };
+document.addEventListener('change', e => { if(e.target.id === 's-accA' || e.target.id === 's-accB'){ S.settings[e.target.id.slice(2)] = e.target.value.trim(); save(); render(); } });
 document.addEventListener('change', e => {
   const f = FIELD[e.target.id]; if(!f) return;
   let v = Math.round(Number(e.target.value));
