@@ -198,6 +198,14 @@ button{cursor:pointer}
 .sc-sum.warn b{color:var(--warn)}
 .sc-actions{display:grid;grid-template-columns:1fr 1.4fr;gap:8px}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+/* blokk beillesztése */
+.pb-text{width:100%;min-height:180px;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:10px 12px;font:inherit;font-size:.92rem;color:var(--fg);resize:vertical}
+.pb-head{display:flex;justify-content:space-between;gap:8px;font-size:.9rem}
+.pb-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.pb-list li{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:6px}
+.pb-list small{grid-column:1 / -1;color:var(--muted);font-size:.78rem}
+.pb-list.bad li{color:var(--bad);display:block}
+.pb-list.bad small{color:var(--bad)}
 
 
 /* fix költségek */
@@ -288,6 +296,7 @@ small.late{color:var(--bad)!important;font-weight:600}
     <div class="sheet-bar"><h2 id="a-title">Új költés</h2><button class="icon-btn" data-close aria-label="Bezárás"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <button class="photo-btn" id="photo-btn" data-photo hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Blokk fotóról</button>
     <input type="file" id="photo-input" accept="image/*" hidden>
+    <button class="photo-btn" data-paste><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6v3H9z"/><path d="M15 5h3v15H6V5h3"/><path d="M9 12h6M9 16h4"/></svg>Blokk beillesztése</button>
     <label class="amount-wrap" for="a-amount"><input id="a-amount" class="num" type="text" inputmode="numeric" autocomplete="off" placeholder="0" aria-label="Összeg forintban"><span>Ft</span></label>
     <div class="a-hours num" id="a-hours"></div>
     <div class="a-extra">
@@ -322,6 +331,14 @@ small.late{color:var(--bad)!important;font-weight:600}
   <section class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sc-title">
     <div class="sheet-bar"><h2 id="sc-title">Blokk ellenőrzése</h2><button class="icon-btn" data-scan-close aria-label="Bezárás"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div id="scan-body"></div>
+  </section>
+</div>
+
+<div class="sheet-wrap" id="paste" hidden>
+  <div class="scrim"></div>
+  <section class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="pb-title">
+    <div class="sheet-bar"><h2 id="pb-title">Blokk beillesztése</h2><button class="icon-btn" data-paste-close aria-label="Bezárás"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div id="paste-body"></div>
   </section>
 </div>
 
@@ -602,6 +619,83 @@ function saveScan(){
   S.expenses.push(e); lastAdded = e.id; save();
   closeScan(); render();
   toast(`${ft(amount)} = ${hrs(amount)} · ${d.shop || CATS[d.cat]}`, true);
+}
+
+/* ---------- blokk beillesztése szövegből ---------- */
+/* Fő- és alkategóriák a beillesztett blokkhoz; "app" = melyik app-kategóriába kerül a kiadás. */
+const PASTE_CATS = [
+  { name:'Élelmiszer és Gasztro', app:'kaja', subs:['Pékáru és sütési alapanyagok','Hús, hal és felvágottak','Tejtermékek és tojás','Friss zöldség és gyümölcs','Alapvető élelmiszerek és szárazáru','Édesség és snack','Italok','Fagyasztott áruk'] },
+  { name:'Háztartás és Vegyi áru', app:'lakas', subs:['Mosás és textilápolás','Tisztítószerek','Papíráru és konyhai kiegészítők','Testápolás és higiénia'] },
+  { name:'Egészség és Sport', app:'egeszseg', subs:['Étrend-kiegészítők és vitaminok','Patika és gyógyszerek'] },
+  { name:'Ruházat és Kiegészítők', app:'ruha', subs:['Hétköznapi ruházat','Sportruházat','Cipők és kiegészítők'] },
+  { name:'Otthon, Műszaki és Barkács', app:'lakas', subs:['Konyhafelszerelés','Műszaki cikkek és kiegészítők','Barkács és felújítás'] }
+];
+const paste = { step:'text', text:'', data:null };
+const normCat = t => String(t || '').toLowerCase().replace(/[,/()&-]/g, ' ').replace(/\s+/g, ' ').trim();
+/* Egy név akkor illik, ha a beírt szöveg a teljes név, vagy a név valamelyik szavánál kezdődik (pl. "Pékáru", "Háztartás"). */
+function findCat(list, input){
+  const q = normCat(input); if(q.length < 3) return [];
+  const exact = list.filter(x => normCat(x) === q); if(exact.length) return exact;
+  return list.filter(x => (' ' + normCat(x)).includes(' ' + q));
+}
+function parsePaste(text){
+  const d = { shop:'', date:'', time:'', items:[], bad:[], headErr:[] };
+  String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean).forEach(line => {
+    const h = line.match(/^(hely|idő|ido)\s*:\s*(.*)$/i);
+    if(h){
+      if(/^hely$/i.test(h[1])){ d.shop = h[2].trim(); return; }
+      const m = h[2].match(/^(\d{4})[.\-\/]\s*(\d{1,2})[.\-\/]\s*(\d{1,2})\.?(?:\s+(\d{1,2})[:.](\d{2}))?\s*$/);
+      const dt = m && new Date(+m[1], +m[2] - 1, +m[3]);
+      if(!m || dt.getMonth() !== +m[2] - 1 || dt.getDate() !== +m[3] || (m[4] && (+m[4] > 23 || +m[5] > 59))){ d.headErr.push(`Az időt nem értem: „${h[2]}”. Minta: 2026.10.30. 8:00`); return; }
+      d.date = ymd(dt); d.time = m[4] ? `${m[4].padStart(2, '0')}:${m[5]}` : '';
+      return;
+    }
+    const parts = line.split(';').map(x => x.trim());
+    const fail = why => d.bad.push({ line, why });
+    if(parts.length !== 3) return fail('3 rész kell pontosvesszővel: név; összeg; kategória');
+    const [name, amt, catTxt] = parts;
+    if(!name) return fail('Hiányzik a tétel neve');
+    const a = amt.replace(/\s|ft|\./gi, '');
+    if(!/^\d+$/.test(a) || +a <= 0) return fail(`Az összeg nem jó: „${amt}”`);
+    const cp = catTxt.split('/').map(x => x.trim());
+    if(cp.length !== 2 || !cp[0] || !cp[1]) return fail('A kategória így kell: Főkategória / Alkategória');
+    const mains = PASTE_CATS.filter(c => findCat([c.name], cp[0]).length);
+    if(mains.length !== 1) return fail(mains.length ? `Nem egyértelmű főkategória: „${cp[0]}”` : `Ismeretlen főkategória: „${cp[0]}”`);
+    const subs = findCat(mains[0].subs, cp[1]);
+    if(subs.length !== 1) return fail(subs.length ? `Nem egyértelmű alkategória: „${cp[1]}”` : `Ismeretlen alkategória a(z) ${mains[0].name} alatt: „${cp[1]}”`);
+    d.items.push({ name, amount:+a, cat:mains[0].app, main:mains[0].name, sub:subs[0] });
+  });
+  if(!d.shop) d.headErr.push('Hiányzik a „Hely:” sor.');
+  if(!d.date && !d.headErr.some(x => x.startsWith('Az időt'))) d.headErr.push('Hiányzik az „Idő:” sor.');
+  return d;
+}
+function openPaste(){ closeAdd(); paste.step = 'text'; paste.data = null; document.getElementById('paste').hidden = false; document.body.classList.add('locked'); renderPaste(); }
+function closePaste(){ document.getElementById('paste').hidden = true; document.body.classList.remove('locked'); }
+function renderPaste(){
+  const body = document.getElementById('paste-body'); if(!body) return;
+  if(paste.step === 'text'){
+    body.innerHTML = `<p class="sc-note">Soronként: név; összeg; Főkategória / Alkategória</p>
+      <textarea id="pb-text" class="pb-text" placeholder="Hely: Lidl Fehérvári út&#10;Idő: 2026.10.30. 8:00&#10;kenyér; 450; Élelmiszer / Pékáru&#10;mosószer; 2990; Háztartás / Mosás" aria-label="Blokk szövege">${esc(paste.text)}</textarea>
+      <div class="sc-actions"><button class="btn" data-paste-close>Mégse</button><button class="btn primary" data-paste-check>Ellenőrzés</button></div>`;
+    return;
+  }
+  const d = paste.data, s = sum(d.items, x => x.amount), ok = !d.headErr.length && d.items.length > 0;
+  body.innerHTML = `
+    ${d.headErr.map(x => `<p class="sc-err">${esc(x)}</p>`).join('')}
+    <div class="pb-head"><b>${esc(d.shop || '—')}</b><span class="num">${d.date ? esc(d.date.replace(/-/g, '.') + '.' + (d.time ? ' ' + d.time : '')) : '—'}</span></div>
+    ${d.items.length ? `<ul class="pb-list">${d.items.map(it => `<li><span>${esc(it.name)}</span><b class="num">${ft(it.amount)}</b><small>${esc(CATS[it.cat])} · ${esc(it.sub)}</small></li>`).join('')}</ul>` : ''}
+    <div class="sc-sum"><span>${d.items.length} tétel összesen</span><b class="num">${ft(s)}</b></div>
+    ${d.bad.length ? `<p class="sc-err">Ezek a sorok nem kerülnek be:</p><ul class="pb-list bad">${d.bad.map(x => `<li>${esc(x.line)}<br><small>${esc(x.why)}</small></li>`).join('')}</ul>` : ''}
+    <div class="sc-actions"><button class="btn" data-paste-back>Vissza</button><button class="btn primary" data-paste-save ${ok ? '' : 'disabled'}>Mentés · ${hrs(s)}</button></div>`;
+}
+function savePaste(){
+  const d = paste.data; if(!d || d.headErr.length || !d.items.length) return;
+  let createdAt = Date.now();
+  if(d.time){ const t = new Date(`${d.date}T${d.time}:00`); if(!isNaN(t)) createdAt = t.getTime(); }
+  const added = d.items.map(it => ({ id:uid(), date:d.date, amount:it.amount, cat:it.cat, shop:d.shop, note:it.name, createdAt, source:'paste' }));
+  S.expenses.push(...added); lastAdded = added.map(x => x.id); save();
+  paste.text = ''; closePaste(); render();
+  toast(`${added.length} tétel, ${ft(sum(added, x => x.amount))} = ${hrs(sum(added, x => x.amount))} · ${d.shop}`, true);
 }
 
 /* ---------- Google Táblázat (régi, átmásolt sorok) ---------- */
@@ -1664,6 +1758,11 @@ document.addEventListener('click', e => {
   if(b.dataset.scDel){ scan.data.items.splice(+b.dataset.scDel, 1); return renderScan(); }
   if('scAdd' in b.dataset){ scan.data.items.push({ name:'', amount:0 }); renderScan(); const n = document.querySelectorAll('.sc-name'); if(n.length) n[n.length-1].focus(); return; }
   if('scSave' in b.dataset) return saveScan();
+  if('paste' in b.dataset) return openPaste();
+  if('pasteClose' in b.dataset) return closePaste();
+  if('pasteCheck' in b.dataset){ paste.data = parsePaste(paste.text); paste.step = 'review'; return renderPaste(); }
+  if('pasteBack' in b.dataset){ paste.step = 'text'; return renderPaste(); }
+  if('pasteSave' in b.dataset) return savePaste();
   if('close' in b.dataset) return closeAdd();
   if(b.dataset.cat) return addExpense(b.dataset.cat);
   if('more' in b.dataset){ showAll = true; return render(); }
@@ -1675,7 +1774,7 @@ document.addEventListener('click', e => {
     if(pendingDelete === b.dataset.del){ S.expenses = S.expenses.filter(x => x.id !== b.dataset.del); pendingDelete = null; save(); render(); return toast('Tétel törölve', false); }
     pendingDelete = b.dataset.del; return render();
   }
-  if('undo' in b.dataset){ if(lastAdded){ S.expenses = S.expenses.filter(x => x.id !== lastAdded); lastAdded = null; save(); render(); } document.getElementById('toast').hidden = true; return; }
+  if('undo' in b.dataset){ if(lastAdded){ const ids = [].concat(lastAdded); S.expenses = S.expenses.filter(x => !ids.includes(x.id)); lastAdded = null; save(); render(); } document.getElementById('toast').hidden = true; return; }
   if('setupSave' in b.dataset) return saveSetup();
   if('export' in b.dataset) return exportData();
   if(b.dataset.relDel !== undefined){ const i = +b.dataset.relDel;
@@ -1714,6 +1813,7 @@ async function importData(file){
 document.addEventListener('change', e => { if(e.target.id === 'import-input' && e.target.files && e.target.files[0]) importData(e.target.files[0]); });
 document.addEventListener('change', e => { if(e.target.id === 'photo-input' && e.target.files && e.target.files[0]) startScan(e.target.files[0]); });
 document.addEventListener('input', e => {
+  if(e.target.id === 'pb-text'){ paste.text = e.target.value; return; }
   if(scan.data && e.target.closest && e.target.closest('#scan')){
     const t = e.target, d = scan.data;
     if(t.id === 'sc-shop') d.shop = t.value;
@@ -1726,7 +1826,7 @@ document.addEventListener('input', e => {
     if(btn){ btn.disabled = s <= 0; btn.textContent = `Mentés · ${hrs(Math.max(0, s))}`; }
     return;
   } if(e.target.id === 'a-amount'){ const v = addAmount(); e.target.value = v ? grp(v) : ''; updateAddHours(); } });
-document.addEventListener('keydown', e => { if(e.key === 'Escape' && !document.getElementById('scan').hidden){ closeScan(); return; } const t = e.target.closest && e.target.closest('[data-toggle]'); if(t && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); toggleEntry(t.dataset.toggle); return; } if(e.key === 'Escape' && !document.getElementById('add').hidden) closeAdd(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && !document.getElementById('paste').hidden){ closePaste(); return; } if(e.key === 'Escape' && !document.getElementById('scan').hidden){ closeScan(); return; } const t = e.target.closest && e.target.closest('[data-toggle]'); if(t && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); toggleEntry(t.dataset.toggle); return; } if(e.key === 'Escape' && !document.getElementById('add').hidden) closeAdd(); });
 window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if(VIEWS[t] && t !== tab){ tab = t; render(); } });
 render();
 initCloud();
