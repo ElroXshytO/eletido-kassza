@@ -692,7 +692,8 @@ function savePaste(){
   const d = paste.data; if(!d || d.headErr.length || !d.items.length) return;
   let createdAt = Date.now();
   if(d.time){ const t = new Date(`${d.date}T${d.time}:00`); if(!isNaN(t)) createdAt = t.getTime(); }
-  const added = d.items.map(it => ({ id:uid(), date:d.date, amount:it.amount, cat:it.cat, shop:d.shop, note:it.name, createdAt, source:'paste' }));
+  /* A fő- és alkategória csak eltárolódik, a statisztikában (még) nem jelenik meg. */
+  const added = d.items.map(it => ({ id:uid(), date:d.date, amount:it.amount, cat:it.cat, shop:d.shop, note:it.name, mainCat:it.main, subCat:it.sub, createdAt, source:'paste' }));
   S.expenses.push(...added); lastAdded = added.map(x => x.id); save();
   paste.text = ''; closePaste(); render();
   toast(`${added.length} tétel, ${ft(sum(added, x => x.amount))} = ${hrs(sum(added, x => x.amount))} · ${d.shop}`, true);
