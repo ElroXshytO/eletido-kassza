@@ -365,6 +365,8 @@ function defaults(){
     settings:{ salary:0, hours:168, rate:0, payday:1, goalSaving:0, budget:0, theme:'system', accA:'', accB:'', accAIn:0 },
     /* egyéb bevétel (pl. talált pénz): a hónap bevételéhez adódik */
     income:[],
+    /* eseti plusz bevételek (pl. zsebpénz): csak a saját hónapjukban számítanak, acc: 'A' vagy 'B' számla */
+    extraIn:[],
     fixed:[],
     /* tartalék-zsebek: havi félretétel a startKey hónaptól */
     pockets:[],
@@ -408,6 +410,7 @@ function hydrate(o){ const d = defaults(); if(!o || typeof o!=='object') o = {};
     ph.items = ph.items.map(it => it.note === 'zárolva, amíg az 1. és 2. fázis kész' ? {...it, note:''} : it);
     delete ph.locked; ph.unlockBy = Array.isArray(ph.unlockBy) ? ph.unlockBy : ph.unlockBy ? [ph.unlockBy] : []; return ph; });
   r.income = Array.isArray(r.income) ? r.income : [];
+  r.extraIn = Array.isArray(r.extraIn) ? r.extraIn : [];
   r.savings = (Array.isArray(r.savings) ? r.savings : []).map(v => ({...v, deposits:Array.isArray(v.deposits) ? v.deposits : [], skip:Array.isArray(v.skip) ? v.skip : []}));
   return r; }
 
@@ -749,21 +752,24 @@ function monthPlan(p = periodOf()){
   const savings = sum(S.savings || [], x => x.monthly);
   const released = sum((S.released || []).filter(x => x.date >= ymd(p.start) && x.date <= ymd(p.end)), x => x.amount);
   const income = sum(periodIncome(p), x => x.amount);
+  const xin = periodExtraIn(p), extraIn = sum(xin, x => x.amount), extraInB = sum(xin.filter(x => exAcc(x) === 'B'), x => x.amount);
   const fixedB = twoAcc() ? sum(S.fixed.filter(x => x.acc === 'B'), x => x.amount) : 0;
-  const plus = st.salary + income - st.goalSaving - fixed - pockets - savings - variable - extra + released;
-  return { fixed, fixedB, pockets, savings, released, income, spent, extra, variable, plus };
+  const plus = st.salary + income + extraIn - st.goalSaving - fixed - pockets - savings - variable - extra + released;
+  return { fixed, fixedB, pockets, savings, released, income, extraIn, extraInB, spent, extra, variable, plus };
 }
 /* ---------- két számla: az elsőre megy a beállított összeg és az egyéb bevétel, a másodikon marad a fizetés többi része ---------- */
 const twoAcc = () => S.settings.accAIn > 0 && S.settings.accAIn < S.settings.salary;
 const accName = k => k === 'B' ? (S.settings.accB || 'Másik számla') : (S.settings.accA || 'Fő számla');
 const fixAcc = f => twoAcc() && f.acc === 'B' ? 'B' : 'A';
+function periodExtraIn(p){ const a = ymd(p.start), b = ymd(p.end); return (S.extraIn || []).filter(x => x.date >= a && x.date <= b).sort((x, y) => y.date.localeCompare(x.date)); }
+const exAcc = x => twoAcc() && x.acc === 'B' ? 'B' : 'A';
 function periodIncome(p){ const a = ymd(p.start), b = ymd(p.end); return (S.income || []).filter(x => x.date >= a && x.date <= b); }
 /* most = a bejött pénz mínusz ami eddig kiment (kifizetett fix, zsebek, megtakarítás, költés); hó végén = a terv szerinti maradék */
 function accounts(p, m){
-  const st = S.settings, a = ymd(p.start), z = ymd(p.end), inB = st.salary - st.accAIn;
+  const st = S.settings, a = ymd(p.start), z = ymd(p.end), inB = st.salary - st.accAIn + m.extraInB;
   const paid = k => sum(S.fixed.filter(f => fixAcc(f) === k && fixedPaid(f)), f => f.amount);
   const svNow = sum((S.savings || []).flatMap(v => v.deposits || []).filter(d => d.date >= a && d.date <= z), d => d.amount);
-  const inA = st.accAIn + m.income, endB = inB - m.fixedB;
+  const inA = st.accAIn + m.income + m.extraIn - m.extraInB, endB = inB - m.fixedB;
   return [
     { name:accName('A'), in:inA, now:inA - paid('A') - m.pockets - st.goalSaving - svNow - m.spent - m.extra, end:m.plus - endB },
     { name:accName('B'), in:inB, now:inB - paid('B'), end:endB }
@@ -797,7 +803,7 @@ function daysUntil(d){ const t = new Date(); t.setHours(0,0,0,0); return Math.ro
 /* ---------- nézetek ---------- */
 let tab = (location.hash || '').slice(1) || 'home';
 if(!['home','fix','zseb','mt','stat','cel','beall'].includes(tab)) tab = 'home';
-let confirmReset = false, relDelArm = null, incEdit = false, incDelArm = null;
+let confirmReset = false, relDelArm = null, incEdit = false, incDelArm = null, xinEdit = false, xinDelArm = null;
 
 const gear = `<button class="icon-btn" data-go="beall" aria-label="Beállítások"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>`;
 
@@ -821,6 +827,7 @@ function viewHome(){
   const days = daysUntil(p.next);
   const parts = [
     {k:'inc', name:'Egyéb bevétel', v:-m.income, c:'--c-plus', sub:periodIncome(p).map(x => x.name).join(', ')},
+    {k:'xin', name:'Plusz bevételek', v:-m.extraIn, c:'--c-plus', sub:periodExtraIn(p).map(x => x.name).join(', ')},
     {k:'goal',   name:'Megtakarítás', v:st.goalSaving, c:'--c-goal', sub:'havi fix félretétel'},
     {k:'fixed',  name:'Fix költségek', v:m.fixed, c:'--c-fixed', sub:`${S.fixed.length} tétel`},
     {k:'pocket', name:'Tartalék-zsebek', v:m.pockets, c:'--c-pocket', sub:'ritka költségekre'},
@@ -829,8 +836,8 @@ function viewHome(){
     {k:'rel', name:'Törölt zsebből visszakerült', v:-m.released, c:'--c-plus', sub:'a hó végi pluszhoz adva'},
     {k:'extra',  name:'Rendkívüli', v:m.extra, c:'--bad', sub:'kereten kívül'},
     {k:'plus',   name:'Plusz az Előző havi megtakarításokba', v:Math.max(0,m.plus), c:'--c-plus'}
-  ].filter(x => (x.k !== 'extra' && x.k !== 'erste' && x.k !== 'rel' && x.k !== 'inc') || x.v !== 0);
-  const bar = parts.map(x => `<span style="width:${Math.max(0,x.v)/(st.salary + m.income)*100}%;background:var(${x.c})" title="${esc(x.name)}"></span>`).join('');
+  ].filter(x => (x.k !== 'extra' && x.k !== 'erste' && x.k !== 'rel' && x.k !== 'inc' && x.k !== 'xin') || x.v !== 0);
+  const bar = parts.map(x => `<span style="width:${Math.max(0,x.v)/(st.salary + m.income + m.extraIn)*100}%;background:var(${x.c})" title="${esc(x.name)}"></span>`).join('');
   const rows = parts.filter(x => x.k !== 'plus').map(x => `
     <div class="row"><i class="dot" style="background:var(${x.c})"></i>
       <div class="name">${esc(x.name)}${x.tag?`<span class="tag">${x.tag}</span>`:''}${x.sub?`<small>${esc(x.sub)}</small>`:''}</div>
@@ -851,6 +858,8 @@ function viewHome(){
       <span class="chip">Mostani tempóval <b class="num">${ft(pacePlus)}</b></span>
     </div>
   </section>
+
+  ${extraInCard(p)}
 
   ${accountsCard(p, m)}
 
@@ -882,8 +891,34 @@ function accountsCard(p, m){
       <small class="num">hó végén várhatóan ${ft(x.end)}</small></div>`).join('')}</div>` : ''}
     ${inc.length ? `<div class="rows">${inc.map(x => `<div class="row fx sv"><div class="name">${esc(x.name || 'Egyéb bevétel')}<small>${dShort(new Date(x.date + 'T12:00'))}</small></div>
       <div class="val">+${ft(x.amount)}<button class="del ${incDelArm === x.id ? 'armed' : ''}" data-inc-del="${x.id}">${incDelArm === x.id ? 'Biztos?' : 'Törlés'}</button></div></div>`).join('')}</div>` : ''}
-    <button class="btn" data-inc-new>+ Egyéb bevétel</button>
+    <button class="btn" data-inc-new>+ Folyószámla</button>
   </section>`;
+}
+function extraInCard(p){
+  const list = periodExtraIn(p), tot = sum(list, x => x.amount);
+  return `<section class="card" aria-label="Plusz bevételek">
+    <div class="budget-top"><div><span class="label">Plusz bevételek</span><div class="st-num num">+${ft(tot)}</div></div>
+      <button class="icon-btn" data-xin-new aria-label="Plusz bevétel hozzáadása" style="font-size:1.6rem;line-height:1">+</button></div>
+    ${list.length ? `<div class="rows">${list.map(x => `<div class="row fx sv"><div class="name">${esc(x.name || 'Plusz bevétel')}<small>${dShort(new Date(x.date + 'T12:00'))}${twoAcc() ? ' · ' + esc(accName(exAcc(x))) : ''}</small></div>
+      <div class="val">+${ft(x.amount)}<button class="del ${xinDelArm === x.id ? 'armed' : ''}" data-xin-del="${x.id}">${xinDelArm === x.id ? 'Biztos?' : 'Törlés'}</button></div></div>`).join('')}</div>` : ''}
+  </section>`;
+}
+function xinForm(){
+  return `<div class="fx-form">
+    <label class="sc-f sc-wide"><span>Megnevezés</span><input id="xi-name" type="text" placeholder="pl. zsebpénz" autocomplete="off"></label>
+    <label class="sc-f"><span>Összeg (Ft)</span><input id="xi-amount" class="num" type="text" inputmode="numeric"></label>
+    <label class="sc-f"><span>Dátum</span><input id="xi-date" type="date" value="${ymd(new Date())}"></label>
+    ${twoAcc() ? `<label class="sc-f sc-wide"><span>Melyik számlára jött?</span><select id="xi-acc"><option value="A" selected>${esc(accName('A'))}</option><option value="B">${esc(accName('B'))}</option></select></label>` : ''}
+    <div class="sc-actions sc-wide"><button class="btn" data-xin-cancel>Mégse</button><button class="btn primary" data-xin-save>Hozzáadás</button></div>
+  </div>`;
+}
+function saveExtraIn(){
+  const amount = numIn('xi-amount'), date = document.getElementById('xi-date').value || ymd(new Date());
+  const name = document.getElementById('xi-name').value.trim() || 'Plusz bevétel';
+  const accEl = document.getElementById('xi-acc'), acc = accEl && accEl.value === 'B' ? 'B' : 'A';
+  if(!amount){ toast('Adj meg összeget', false); return; }
+  S.extraIn.push({ id:uid(), date, amount, name, acc }); xinEdit = false; save(); render();
+  toast(`${ft(amount)} plusz bevétel hozzáadva`, false);
 }
 function incForm(){
   return `<div class="fx-form">
@@ -1257,7 +1292,7 @@ function viewStat(){
   parts.push({ k:'_fix', name:'Fix költségek', v:m.fixed, c:CAT_COLOR._fix });
   if(pocketOut) parts.push({ k:'_zseb', name:'Zsebből fizetve', v:pocketOut, c:CAT_COLOR._zseb });
   const list = parts.filter(x => x.v > 0).sort((x, y) => y.v - x.v);
-  const total = sum(list, x => x.v), income = st.salary + m.income, net = income - total;
+  const total = sum(list, x => x.v), income = st.salary + m.income + m.extraIn, net = income - total;
   const bar = list.map(x => `<span style="flex:${x.v} 1 0;background:${x.c}" title="${esc(x.name)}"></span>`).join('');
   const leg = list.map(x => `<div class="st-leg"><i style="background:${x.c}"></i><span>${esc(x.name)}</span><b class="num">${ft(x.v)}</b><small>${Math.round(x.v / (total || 1) * 100)}%</small></div>`).join('');
   const leftPct = Math.max(0, Math.round(b.left / (st.budget || 1) * 100));
@@ -1279,7 +1314,7 @@ function viewStat(){
     <p class="soon">A megtakarítások nem kiadás, ezért nincsenek benne.</p>
   </section>
   <div class="st-two">
-    <section class="card"><span class="label">Bevétel</span><div class="st-num num">${ft(income)}</div><span style="color:var(--muted);font-size:.85rem">havi fizetés${m.income ? ` + ${ft(m.income)} egyéb` : ''}</span>
+    <section class="card"><span class="label">Bevétel</span><div class="st-num num">${ft(income)}</div><span style="color:var(--muted);font-size:.85rem">havi fizetés${m.income ? ` + ${ft(m.income)} egyéb` : ''}${m.extraIn ? ` + ${ft(m.extraIn)} plusz` : ''}</span>
       <div class="st-line"><span style="width:100%;background:var(--good)"></span></div></section>
     <section class="card"><span class="label">Nettó pénzforgalom</span><div class="st-num num">${ft(net)}</div><span class="${net >= 0 ? 'st-pos' : 'st-neg'}">${net >= 0 ? '⊕ Pozitív' : '⊖ Negatív'}</span>
       <div class="st-line"><span style="width:100%;background:var(--good)"></span></div>
@@ -1652,6 +1687,7 @@ function editContent(){
   if(tab === 'cel' && glEdit && glEdit.startsWith('new:')){ const ph = phaseById(glEdit.slice(4)); return ph ? [`Új tétel: ${esc(ph.name)}`, glForm({})] : null; }
   if(tab === 'cel' && glEdit){ const it = goalItems().find(i => i.id === glEdit); return it ? [esc(it.name), glForm(it)] : null; }
   if(tab === 'home' && incEdit) return ['Egyéb bevétel', incForm()];
+  if(tab === 'home' && xinEdit) return ['Plusz bevétel', xinForm()];
   if(tab === 'zseb' && zsPay){ const z = S.pockets.find(x => x.id === zsPay); return z ? [`Kifizetés: ${esc(z.name)}`, zsPayForm(z)] : null; }
   if(tab === 'zseb' && zsEdit) return [zsEdit === 'new' ? 'Új zseb' : 'Zseb', zsForm(zsEdit === 'new' ? {} : S.pockets.find(x => x.id === zsEdit) || {})];
   return null;
@@ -1664,7 +1700,7 @@ function renderEdit(){
   el.hidden = false; document.body.classList.add('locked');
   if(wasHidden){ const f = el.querySelector('input'); if(f) setTimeout(() => f.focus(), 30); }
 }
-function closeEdit(){ incEdit = false; zsPay = null; glEdit = null; glDelArm = false; phEdit = null; phDelArm = false; fixEdit = null; svEdit = null; svDep = null; zsEdit = null; fixDelArm = false; svDelArm = false; zsDelArm = false; render(); }
+function closeEdit(){ incEdit = false; xinEdit = false; zsPay = null; glEdit = null; glDelArm = false; phEdit = null; phDelArm = false; fixEdit = null; svEdit = null; svDep = null; zsEdit = null; fixDelArm = false; svDelArm = false; zsDelArm = false; render(); }
 function renderStatus(){
   const el = document.getElementById('sync'); if(!el) return;
   el.innerHTML = !FB_CONFIG ? `<i></i>Mentve ebben a böngészőben`
@@ -1675,7 +1711,7 @@ function applyTheme(){
   const t = S.settings.theme, r = document.documentElement;
   if(t === 'light' || t === 'dark') r.setAttribute('data-theme', t); else r.removeAttribute('data-theme');
 }
-function go(t){ tab = t; confirmReset = false; fixEdit = null; svEdit = null; svDep = null; zsEdit = null; zsPay = null; zsUndoArm = null; incEdit = false; incDelArm = null; glEdit = null; glPayArm = null; glDelArm = false; phEdit = null; phDelArm = false; try{ history.replaceState(null,'', t==='home' ? location.pathname : '#'+t); }catch(e){} render(); window.scrollTo(0,0); }
+function go(t){ tab = t; confirmReset = false; fixEdit = null; svEdit = null; svDep = null; zsEdit = null; zsPay = null; zsUndoArm = null; incEdit = false; incDelArm = null; xinEdit = false; xinDelArm = null; glEdit = null; glPayArm = null; glDelArm = false; phEdit = null; phDelArm = false; try{ history.replaceState(null,'', t==='home' ? location.pathname : '#'+t); }catch(e){} render(); window.scrollTo(0,0); }
 
 /* ---------- események ---------- */
 document.addEventListener('click', e => {
@@ -1721,6 +1757,11 @@ document.addEventListener('click', e => {
   if(b.dataset.zsPay){ zsPay = b.dataset.zsPay; return render(); }
   if('zpSave' in b.dataset) return payZseb();
   if(b.dataset.zsUndo){ const [zid, i] = b.dataset.zsUndo.split('|'); if(zsUndoArm !== zid){ zsUndoArm = zid; return render(); } return undoZseb(zid, +i); }
+  if('xinNew' in b.dataset){ xinEdit = true; return render(); }
+  if('xinCancel' in b.dataset){ xinEdit = false; return render(); }
+  if('xinSave' in b.dataset) return saveExtraIn();
+  if(b.dataset.xinDel){ if(xinDelArm !== b.dataset.xinDel){ xinDelArm = b.dataset.xinDel; return render(); }
+    S.extraIn = S.extraIn.filter(x => x.id !== b.dataset.xinDel); xinDelArm = null; save(); render(); return toast('Plusz bevétel törölve', false); }
   if('incNew' in b.dataset){ incEdit = true; return render(); }
   if('incCancel' in b.dataset){ incEdit = false; return render(); }
   if('incSave' in b.dataset) return saveIncome();
