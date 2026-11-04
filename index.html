@@ -1392,7 +1392,7 @@ function viewZseb(){
   </section>
   <section class="card"><div class="rows">${rows}</div>
     <button class="btn" data-zs-edit="new">+ Új zseb</button>
-    <p class="soon">Koppints a névre a szerkesztéshez. A havi összeg minden hónap ${S.settings.payday}-án gyűlik. A „Megvettem” a zsebből vonja le a fizetett összeget, nem a változó keretből, és a következő dátum magától továbblép. Ha több, mint ami a zsebben van, nem engedi mínuszba. A kifizetést visszavonhatod.</p>
+    <p class="soon">Koppints a névre a szerkesztéshez. A havi összeg minden hónap ${S.settings.payday}-án gyűlik. A „Megvettem” a zsebből vonja le a fizetett összeget, nem a változó keretből, és ha a zseb teljes összegét kifizeted, a következő dátum magától továbblép. Kevesebbet is beírhatsz, ilyenkor a maradék a zsebben marad. Ha több, mint ami a zsebben van, nem engedi mínuszba. A kifizetést visszavonhatod.</p>
   </section>`;
 }
 const numIn = id => Math.round(Number((document.getElementById(id) || {value:''}).value.replace(/[^\d]/g, ''))) || 0;
@@ -1409,7 +1409,7 @@ function zsPayForm(z){
   const bal = zsBalance(z);
   return `<div class="fx-form">
     <p class="soon sc-wide">A zsebben most <b class="num">${ft(bal)}</b> van.</p>
-    <label class="sc-f"><span>Fizetett összeg (Ft)</span><input id="zp-amount" class="num" type="text" inputmode="numeric" value="${z.price}"></label>
+    <label class="sc-f"><span>Fizetett összeg (Ft)</span><input id="zp-amount" class="num" type="text" inputmode="numeric" value="${bal}"></label>
     <label class="sc-f"><span>Dátum</span><input id="zp-date" type="date" value="${ymd(new Date())}"></label>
     <p class="form-msg" id="zp-msg">${z.price > bal ? `Figyelem: a tervezett ár (${ft(z.price)}) több, mint ami a zsebben van.` : ''}</p>
     <div class="sc-actions sc-wide"><button class="btn" data-zs-cancel>Mégse</button><button class="btn primary" data-zp-save>Levonás a zsebből</button></div>
@@ -1422,9 +1422,11 @@ function payZseb(){
   const msg = document.getElementById('zp-msg');
   if(!amount){ msg.textContent = 'Adj meg összeget.'; return; }
   if(amount > bal){ msg.textContent = `Nincs elég pénz a zsebben: ${ft(bal)} van benne, ${ft(amount - bal)} hiányzik. A zseb nem mehet mínuszba.`; return; }
+  /* részleges kifizetés: csak a beírt összeg jön le, a maradék a zsebben marad, a következő dátum nem lép tovább */
+  const full = amount >= bal;
   z.log.push({ date, amount, prevNext:z.next || null });
-  z.next = addMonths(z.next || date, z.every);
-  zsPay = null; save(); render(); toast(`${z.name}: ${ft(amount)} levonva a zsebből`, false);
+  if(full) z.next = addMonths(z.next || date, z.every);
+  zsPay = null; save(); render(); toast(full ? `${z.name}: ${ft(amount)} levonva a zsebből` : `${z.name}: ${ft(amount)} levonva, ${ft(bal - amount)} maradt a zsebben`, false);
 }
 /* visszavonás: az összeg visszakerül a zsebbe, és ha ez volt az utolsó kifizetés, a következő dátum is visszaáll */
 function undoZseb(id, i){
