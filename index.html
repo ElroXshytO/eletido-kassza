@@ -1411,8 +1411,9 @@ function zsPayForm(z){
     <p class="soon sc-wide">A zsebben most <b class="num">${ft(bal)}</b> van.</p>
     <label class="sc-f"><span>Fizetett összeg (Ft)</span><input id="zp-amount" class="num" type="text" inputmode="numeric" value="${bal}"></label>
     <label class="sc-f"><span>Dátum</span><input id="zp-date" type="date" value="${ymd(new Date())}"></label>
-    <p class="form-msg" id="zp-msg">${z.price > bal ? `Figyelem: a tervezett ár (${ft(z.price)}) több, mint ami a zsebben van.` : ''}</p>
-    <div class="sc-actions sc-wide"><button class="btn" data-zs-cancel>Mégse</button><button class="btn primary" data-zp-save>Levonás a zsebből</button></div>
+    ${z.price > bal ? `<p class="soon sc-wide">A tervezett ár ${ft(z.price)}, most legfeljebb ${ft(bal)} vonható le. A beírt összeg jön le.</p>` : ''}
+    <p class="form-msg" id="zp-msg"></p>
+    <div class="sc-actions sc-wide"><button class="btn" data-zs-cancel>Mégse</button><button class="btn primary" data-zp-save>Levonás: <span id="zp-label">${ft(bal)}</span></button></div>
   </div>`;
 }
 /* a zseb nem mehet mínuszba: ha nincs benne elég, figyelmeztet és nem vonja le */
@@ -1858,6 +1859,7 @@ document.addEventListener('change', e => { if(e.target.id === 'import-input' && 
 document.addEventListener('change', e => { if(e.target.id === 'photo-input' && e.target.files && e.target.files[0]) startScan(e.target.files[0]); });
 document.addEventListener('input', e => {
   if(e.target.id === 'pb-text'){ paste.text = e.target.value; return; }
+  if(e.target.id === 'zp-amount'){ const l = document.getElementById('zp-label'); if(l) l.textContent = ft(numIn('zp-amount')); return; }
   if(scan.data && e.target.closest && e.target.closest('#scan')){
     const t = e.target, d = scan.data;
     if(t.id === 'sc-shop') d.shop = t.value;
